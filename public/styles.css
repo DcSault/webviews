@@ -13,6 +13,33 @@
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
+/* Style du bouton de flou */
+.blur-btn {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-left: 10px;
+}
+
+.blur-btn:hover {
+  background-color: #1991db;
+}
+
+/* Flou par défaut sur les images */
+.media-content img {
+  filter: blur(8px);
+  transition: filter 0.3s ease;
+}
+
+/* Classe pour désactiver le flou */
+.no-blur img {
+  filter: none;
+}
+
 /* Dans styles.css */
 .logout-btn {
   background-color: #dc3545;
