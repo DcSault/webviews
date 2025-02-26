@@ -64,7 +64,7 @@ app.use(morgan('combined', { stream: accessLogStream }));
 
 // Configuration de la session
 app.use(session({
-    secret: 'votre_secret_session', // Changez ceci par une clé secrète forte
+    secret: process.env.SESSION_SECRET || 'votre_secret_session', // Utilisez une clé secrète forte
     resave: false,
     saveUninitialized: true,
     cookie: { secure: false } // À mettre à true en production avec HTTPS
@@ -246,6 +246,39 @@ app.post('/api/upload', upload.array('files', 10), async (req, res) => {
     } catch (err) {
         console.error('Erreur lors de l\'upload des fichiers :', err);
         res.status(500).json({ error: 'Erreur lors de l\'upload des fichiers' });
+    }
+});
+
+// Route pour supprimer un média
+app.delete('/api/media/:id', async (req, res) => {
+    try {
+        const mediaId = req.params.id;
+        const metadata = await getMetadata();
+
+        // Trouver le média à supprimer
+        const mediaIndex = metadata.findIndex(item => item.id === mediaId);
+        if (mediaIndex === -1) {
+            return res.status(404).json({ error: 'Média non trouvé' });
+        }
+
+        // Supprimer le fichier physique du serveur
+        const mediaToDelete = metadata[mediaIndex];
+        const filePath = path.join(__dirname, mediaToDelete.filePath);
+
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath); // Supprimer le fichier
+        } else {
+            console.warn(`Fichier non trouvé : ${filePath}`);
+        }
+
+        // Supprimer le média des métadonnées
+        metadata.splice(mediaIndex, 1);
+        await saveMetadata(metadata);
+
+        res.status(200).json({ message: 'Média supprimé avec succès' });
+    } catch (err) {
+        console.error('Erreur lors de la suppression du média :', err);
+        res.status(500).json({ error: 'Erreur lors de la suppression du média' });
     }
 });
 
