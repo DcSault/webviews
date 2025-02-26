@@ -2,54 +2,64 @@ document.addEventListener('DOMContentLoaded', () => {
   const mediaGrid = document.getElementById('mediaGrid');
   const filterButtons = document.querySelectorAll('.filters button');
   const searchInput = document.getElementById('searchInput');
-  const toggleBlurBtn = document.getElementById('toggleBlur'); // Bouton de toggle pour le flou
+  const toggleBlurBtn = document.getElementById('toggleBlur');
   let mediaItems = [];
 
-  // État du flou (activé par défaut)
+  // État du flou
   let isBlurred = localStorage.getItem('blurState') !== 'disabled';
 
-  // Fonction pour mettre à jour l'état du flou
+  // Mise à jour du flou
   function updateBlurState() {
-    if (isBlurred) {
-      mediaGrid.classList.remove('no-blur');
-      toggleBlurBtn.textContent = 'Désactiver le flou';
-    } else {
-      mediaGrid.classList.add('no-blur');
-      toggleBlurBtn.textContent = 'Activer le flou';
-    }
+    mediaGrid.classList.toggle('no-blur', !isBlurred);
+    toggleBlurBtn.textContent = isBlurred ? 'Désactiver le flou' : 'Activer le flou';
     localStorage.setItem('blurState', isBlurred ? 'enabled' : 'disabled');
   }
 
-  // Appliquer l'état initial du flou
-  updateBlurState();
-
-  // Gestion du clic sur le bouton de flou
+  // Gestion du toggle flou
   toggleBlurBtn.addEventListener('click', () => {
     isBlurred = !isBlurred;
     updateBlurState();
   });
 
-  // Fonction pour charger les médias depuis l'API
+  // Compteurs de filtres
+  function updateFilterCounts() {
+    const counts = {
+      all: mediaItems.length,
+      image: mediaItems.filter(item => item.type === 'image').length,
+      video: mediaItems.filter(item => item.type === 'video').length,
+      audio: mediaItems.filter(item => item.type === 'audio').length,
+      other: mediaItems.filter(item => item.type === 'other').length,
+    };
+
+    filterButtons.forEach(button => {
+      const filterType = button.dataset.filter;
+      const baseText = button.textContent.split(' (')[0];
+      button.textContent = `${baseText} (${counts[filterType]})`;
+    });
+  }
+
+  // Chargement des médias
   async function loadMedia() {
     try {
       mediaGrid.innerHTML = '<div class="loading">Chargement des médias...</div>';
       const response = await fetch('/api/media');
-      if (!response.ok) {
-        throw new Error('Erreur lors du chargement des médias');
-      }
+      
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      
       mediaItems = await response.json();
       displayMedia(mediaItems);
       updateFilterCounts();
+      updateBlurState();
     } catch (error) {
-      console.error('Erreur:', error);
-      mediaGrid.innerHTML = `<div class="error">Erreur lors du chargement des médias: ${error.message}</div>`;
+      mediaGrid.innerHTML = `<div class="error">Erreur : ${error.message}</div>`;
+      console.error('Erreur de chargement:', error);
     }
   }
 
-  // Fonction pour créer un élément média
+  // Création des éléments média
   function createMediaElement(item) {
     const card = document.createElement('div');
-    card.className = 'media-card';
+    card.className = `media-card ${isBlurred ? 'blurred' : ''}`;
     card.dataset.type = item.type;
 
     const contentDiv = document.createElement('div');
@@ -208,53 +218,34 @@ document.addEventListener('DOMContentLoaded', () => {
     return card;
   }
 
-  // Fonction pour afficher les médias dans la grille
+  // Affichage des médias
   function displayMedia(items) {
-    mediaGrid.innerHTML = '';
-
-    if (items.length === 0) {
-      mediaGrid.innerHTML = '<div class="no-media">Aucun média trouvé</div>';
-      return;
-    }
-
+    mediaGrid.innerHTML = items.length ? '' : '<div class="no-media">Aucun média trouvé</div>';
+    
     items.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
+    
     const fragment = document.createDocumentFragment();
-    items.forEach(item => {
-      const mediaElement = createMediaElement(item);
-      fragment.appendChild(mediaElement);
-    });
-
+    items.forEach(item => fragment.appendChild(createMediaElement(item)));
     mediaGrid.appendChild(fragment);
   }
 
-  // Appliquer les filtres et la recherche
+  // Filtrage et recherche
   function applyFiltersAndSearch() {
     const activeFilter = document.querySelector('.filters button.active').dataset.filter;
     const searchTerm = searchInput.value.toLowerCase();
 
-    let filteredItems = mediaItems;
+    let filtered = mediaItems.filter(item => {
+      const matchFilter = activeFilter === 'all' || item.type === activeFilter;
+      const matchSearch = [item.sender, item.description, item.originalName]
+        .some(text => (text || '').toLowerCase().includes(searchTerm));
+      
+      return matchFilter && matchSearch;
+    });
 
-    if (activeFilter !== 'all') {
-      filteredItems = filteredItems.filter(item => item.type === activeFilter);
-    }
-
-    if (searchTerm) {
-      filteredItems = filteredItems.filter(item => {
-        const sender = (item.sender || '').toLowerCase();
-        const description = (item.description || '').toLowerCase();
-        const filename = (item.originalName || '').toLowerCase();
-
-        return sender.includes(searchTerm) ||
-               description.includes(searchTerm) ||
-               filename.includes(searchTerm);
-      });
-    }
-
-    displayMedia(filteredItems);
+    displayMedia(filtered);
   }
 
-  // Gérer le filtrage des médias
+  // Événements
   filterButtons.forEach(button => {
     button.addEventListener('click', () => {
       filterButtons.forEach(btn => btn.classList.remove('active'));
@@ -263,30 +254,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Gérer la recherche
-  searchInput.addEventListener('input', () => {
-    applyFiltersAndSearch();
-  });
+  searchInput.addEventListener('input', () => applyFiltersAndSearch());
 
-  // Ajouter un bouton pour rafraîchir la liste
-  const filtersContainer = document.querySelector('.filters');
-  const refreshButton = document.createElement('button');
-  refreshButton.className = 'refresh-btn';
-  refreshButton.innerHTML = `
+  // Bouton rafraîchissement
+  const refreshBtn = document.createElement('button');
+  refreshBtn.className = 'refresh-btn';
+  refreshBtn.innerHTML = `
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M23 4v6h-6"></path>
-      <path d="M1 20v-6h6"></path>
-      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path>
-      <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"></path>
+      <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M20.49 15a9 9 0 0 1-14.85 3.36L1 14"/>
     </svg>
     Rafraîchir
   `;
-  filtersContainer.appendChild(refreshButton);
+  refreshBtn.addEventListener('click', loadMedia);
+  document.querySelector('.filters').appendChild(refreshBtn);
 
-  refreshButton.addEventListener('click', () => {
-    loadMedia();
-  });
-
-  // Charger les médias au démarrage
+  // Initialisation
+  updateBlurState();
   loadMedia();
 });
