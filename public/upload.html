@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Upload de médias</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .upload-container {
+      max-width: 800px;
+      margin: 0 auto;
+      background-color: var(--card-bg);
+      border-radius: var(--border-radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    
+    .upload-form {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    .form-group label {
+      font-weight: 500;
+    }
+    
+    .form-group input, .form-group textarea {
+      padding: 12px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius);
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: inherit;
+    }
+    
+    .dropzone {
+      border: 2px dashed var(--border-color);
+      border-radius: var(--border-radius);
+      padding: 40px 20px;
+      text-align: center;
+      transition: all 0.2s ease;
+      position: relative;
+      min-height: 200px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+    }
+    
+    .dropzone.highlight {
+      border-color: var(--primary-color);
+      background-color: rgba(29, 161, 242, 0.1);
+    }
+    
+    .dropzone svg {
+      color: var(--text-secondary);
+      margin-bottom: 10px;
+    }
+    
+    .dropzone p {
+      color: var(--text-secondary);
+      margin: 0;
+    }
+    
+    .dropzone input {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+    
+    .preview-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 15px;
+      margin-top: 20px;
+    }
+    
+    .preview-item {
+      position: relative;
+      border-radius: var(--border-radius);
+      overflow: hidden;
+      aspect-ratio: 1;
+      background-color: var(--bg-color);
+    }
+    
+    .preview-item img, .preview-item video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    
+    .preview-item .file-icon {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      padding: 10px;
+      text-align: center;
+    }
+    
+    .preview-item .file-icon p {
+      font-size: 12px;
+      margin-top: 10px;
+      word-break: break-all;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    
+    .preview-item .remove-btn {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      background-color: rgba(0, 0, 0, 0.5);
+      color: white;
+      border: none;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .preview-item .remove-btn:hover {
+      background-color: rgba(224, 36, 94, 0.8);
+    }
+    
+    .submit-btn {
+      padding: 12px 20px;
+      background-color: var(--primary-color);
+      color: white;
+      border: none;
+      border-radius: 30px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    
+    .submit-btn:hover {
+      background-color: #1991db;
+    }
+    
+    .submit-btn:disabled {
+      background-color: var(--text-secondary);
+      cursor: not-allowed;
+    }
+    
+    .upload-progress {
+      margin-top: 20px;
+      display: none;
+    }
+    
+    .progress-bar {
+      height: 10px;
+      background-color: var(--border-color);
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    
+    .progress-bar-fill {
+      height: 100%;
+      background-color: var(--primary-color);
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+    
+    .upload-result {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: var(--border-radius);
+      display: none;
+    }
+    
+    .upload-success {
+      background-color: rgba(40, 167, 69, 0.1);
+      border: 1px solid rgba(40, 167, 69, 0.2);
+      color: #28a745;
+    }
+    
+    .upload-error {
+      background-color: rgba(220, 53, 69, 0.1);
+      border: 1px solid rgba(220, 53, 69, 0.2);
+      color: #dc3545;
+    }
+    
+    /* Style pour la zone de collage */
+    .paste-zone {
+      border: 2px dashed var(--border-color);
+      border-radius: var(--border-radius);
+      padding: 20px;
+      text-align: center;
+      transition: all 0.2s ease;
+      margin-top: 20px;
+      cursor: pointer;
+    }
+    
+    .paste-zone:hover, .paste-zone:focus {
+      border-color: var(--primary-color);
+      outline: none;
+    }
+    
+    .paste-zone p {
+      margin: 0;
+      color: var(--text-secondary);
+    }
+    
+    /* Instructions */
+    .instructions {
+      margin-top: 30px;
+      padding: 15px;
+      border-radius: var(--border-radius);
+      background-color: rgba(29, 161, 242, 0.1);
+      border: 1px solid rgba(29, 161, 242, 0.2);
+    }
+    
+    .instructions h3 {
+      margin-top: 0;
+      color: var(--primary-color);
+      margin-bottom: 15px;
+    }
+    
+    .instructions h4 {
+      margin-top: 15px;
+      margin-bottom: 10px;
+    }
+    
+    .instructions ul, .instructions ol {
+      margin-bottom: 0;
+      padding-left: 20px;
+    }
+    
+    .instructions li {
+      margin-bottom: 8px;
+    }
+    
+    .instructions li:last-child {
+      margin-bottom: 0;
+    }
+    
+    @media (max-width: 768px) {
+      .upload-container {
+        padding: 15px;
+      }
+      
+      .dropzone {
+        padding: 20px 15px;
+      }
+      
+      .preview-container {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Médiathèque</h1>
+    <nav>
+      <a href="/">Accueil</a>
+      <a href="/upload.html" class="active">Upload</a>
+    </nav>
+    <button id="themeToggle" class="theme-toggle" title="Changer de thème">🌙</button>
+  </header>
+  
+  <main>
+    <div class="upload-container">
+      <h2>Upload de médias</h2>
+      
+      <form id="uploadForm" class="upload-form">
+        <div class="form-group">
+          <label for="sender">Nom/Pseudo</label>
+          <input type="text" id="sender" name="sender" required placeholder="Votre nom ou pseudo">
+        </div>
+        
+        <div class="form-group">
+          <label for="description">Description</label>
+          <textarea id="description" name="description" rows="3" placeholder="Description du média (optionnel)"></textarea>
+        </div>
+        
+        <div class="form-group">
+          <label>Fichiers</label>
+          <div id="dropzone" class="dropzone">
+            <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            <p>Glissez-déposez vos fichiers ici ou cliquez pour sélectionner</p>
+            <small>Maximum 10 fichiers, 50MB par fichier</small>
+            <input type="file" id="fileInput" multiple>
+          </div>
+          
+          <div id="previewContainer" class="preview-container"></div>
+        </div>
+        
+        <!-- Zone de collage optimisée pour iPhone -->
+        <div class="form-group">
+          <label>Coller depuis le presse-papier</label>
+          <div id="pasteZone" class="paste-zone">
+            <p>Collez une image depuis votre appareil</p>
+            
+            <!-- Input visible pour iOS -->
+            <input type="text" id="pasteInput" 
+                  placeholder="Appuyez ici, puis appuyez longuement pour coller" 
+                  style="width: 100%; padding: 12px; margin: 10px 0; border: 1px solid var(--border-color); border-radius: var(--border-radius);">
+            
+            <!-- Message pour desktop -->
+            <p class="desktop-only" style="font-size: 0.8em; margin-top: 10px;">Sur ordinateur : cliquez n'importe où dans cette zone et utilisez Ctrl+V / Cmd+V</p>
+          </div>
+        </div>
+        
+        <button type="submit" id="submitBtn" class="submit-btn" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+          Uploader
+        </button>
+      </form>
+      
+      <div id="uploadProgress" class="upload-progress">
+        <p>Upload en cours... <span id="progressText">0%</span></p>
+        <div class="progress-bar">
+          <div id="progressBarFill" class="progress-bar-fill"></div>
+        </div>
+      </div>
+      
+      <div id="uploadResult" class="upload-result"></div>
+      
+      <div class="instructions">
+        <h3>Comment ajouter des médias</h3>
+        
+        <h4>Téléverser des fichiers :</h4>
+        <ul>
+          <li><strong>Glisser-déposer :</strong> Faites glisser vos fichiers directement dans la zone de dépôt.</li>
+          <li><strong>Sélection manuelle :</strong> Cliquez sur la zone de dépôt pour sélectionner des fichiers.</li>
+        </ul>
+        
+        <h4>Coller une image :</h4>
+        <ol>
+          <li><strong>Sur iPhone ou iPad :</strong> 
+            <ul>
+              <li>Copiez une image depuis Photos ou une autre application</li>
+              <li>Appuyez sur le champ de texte dans la zone de collage</li>
+              <li>Appuyez <strong>longuement</strong> sur le champ jusqu'à voir apparaître "Coller"</li>
+              <li>Appuyez sur "Coller"</li>
+            </ul>
+          </li>
+          <li><strong>Sur ordinateur :</strong>
+            <ul>
+              <li>Copiez une image (Ctrl+C ou Cmd+C)</li>
+              <li>Cliquez dans la zone de collage</li>
+              <li>Collez avec Ctrl+V ou Cmd+V</li>
+            </ul>
+          </li>
+        </ol>
+      </div>
+    </div>
+  </main>
+  
+  <footer>
+    <p>© 2025 - Gestionnaire de Médias</p>
+  </footer>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const uploadForm = document.getElementById('uploadForm');
+      const dropzone = document.getElementById('dropzone');
+      const fileInput = document.getElementById('fileInput');
+      const previewContainer = document.getElementById('previewContainer');
+      const submitBtn = document.getElementById('submitBtn');
+      const uploadProgress = document.getElementById('uploadProgress');
+      const progressBarFill = document.getElementById('progressBarFill');
+      const progressText = document.getElementById('progressText');
+      const uploadResult = document.getElementById('uploadResult');
+      const themeToggle = document.getElementById('themeToggle');
+      
+      // Fichiers sélectionnés
+      let selectedFiles = [];
+      
+      // Initialiser le mode sombre
+      function initDarkMode() {
+        const body = document.body;
+        const storedTheme = localStorage.getItem('theme');
+        
+        if (storedTheme) {
+          body.classList.toggle('dark-mode', storedTheme === 'dark');
+        } else {
+          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          body.classList.toggle('dark-mode', prefersDark);
+        }
+        
+        themeToggle.innerHTML = body.classList.contains('dark-mode') ? '☀️' : '🌙';
+        themeToggle.title = body.classList.contains('dark-mode') ? 'Passer au mode clair' : 'Passer au mode sombre';
+      }
+      
+      // Appeler initDarkMode au chargement
+      initDarkMode();
+      
+      // Gérer le changement de thème
+      themeToggle.addEventListener('click', () => {
+        document.body.classList.toggle('dark-mode');
+        themeToggle.innerHTML = document.body.classList.contains('dark-mode') ? '☀️' : '🌙';
+        themeToggle.title = document.body.classList.contains('dark-mode') ? 'Passer au mode clair' : 'Passer au mode sombre';
+        localStorage.setItem('theme', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
+      });
+      
+      // Fonction pour mettre à jour le bouton submit
+      function updateSubmitButton() {
+        submitBtn.disabled = selectedFiles.length === 0;
+      }
+      
+      // Fonction pour créer un aperçu
+      function createPreview(file, index) {
+        const previewItem = document.createElement('div');
+        previewItem.className = 'preview-item';
+        previewItem.dataset.index = index;
+        
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove-btn';
+        removeBtn.innerHTML = '×';
+        removeBtn.title = 'Supprimer';
+        removeBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          removeFile(index);
+        });
+        
+        if (file.type.startsWith('image/')) {
+          const img = document.createElement('img');
+          const objectUrl = URL.createObjectURL(file);
+          img.src = objectUrl;
+          img.alt = file.name;
+          previewItem.appendChild(img);
+        } else if (file.type.startsWith('video/')) {
+          const video = document.createElement('video');
+          const objectUrl = URL.createObjectURL(file);
+          video.src = objectUrl;
+          video.muted = true;
+          video.loop = true;
+          video.playsInline = true;
+          video.addEventListener('mouseover', () => {
+            video.play().catch(() => {});
+          });
+          video.addEventListener('mouseout', () => {
+            video.pause();
+          });
+          previewItem.appendChild(video);
+        } else if (file.type.startsWith('audio/')) {
+          const fileIcon = document.createElement('div');
+          fileIcon.className = 'file-icon';
+          fileIcon.innerHTML = `
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" stroke-width="2">
+              <path d="M9 18V5l12-2v13"></path>
+              <circle cx="6" cy="18" r="3"></circle>
+              <circle cx="18" cy="16" r="3"></circle>
+            </svg>
+            <p>${file.name}</p>
+          `;
+          previewItem.appendChild(fileIcon);
+        } else {
+          const fileIcon = document.createElement('div');
+          fileIcon.className = 'file-icon';
+          fileIcon.innerHTML = `
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            <p>${file.name}</p>
+          `;
+          previewItem.appendChild(fileIcon);
+        }
+        
+        previewItem.appendChild(removeBtn);
+        previewContainer.appendChild(previewItem);
+      }
+      
+      // Fonction pour supprimer un fichier
+      function removeFile(index) {
+        selectedFiles.splice(index, 1);
+        refreshPreviews();
+      }
+      
+      // Rafraîchir tous les aperçus
+      function refreshPreviews() {
+        previewContainer.innerHTML = '';
+        selectedFiles.forEach((file, index) => {
+          createPreview(file, index);
+        });
+        updateSubmitButton();
+      }
+      
+      // Ajouter des fichiers à la sélection
+      function addFiles(files) {
+        // Vérifier si l'utilisateur a sélectionné trop de fichiers
+        if (selectedFiles.length + files.length > 10) {
+          showResultMessage('Vous ne pouvez pas uploader plus de 10 fichiers à la fois.', false);
+          return;
+        }
+        
+        // Ajouter chaque fichier
+        Array.from(files).forEach(file => {
+          // Vérifier la taille du fichier
+          if (file.size > 50 * 1024 * 1024) {
+            showResultMessage(`Le fichier "${file.name}" est trop volumineux. La taille maximale est de 50MB.`, false);
+            return;
+          }
+          
+          selectedFiles.push(file);
+          createPreview(file, selectedFiles.length - 1);
+        });
+        
+        updateSubmitButton();
+      }
+      
+      // Afficher un message de résultat
+      function showResultMessage(message, success) {
+        uploadResult.textContent = message;
+        uploadResult.className = 'upload-result ' + (success ? 'upload-success' : 'upload-error');
+        uploadResult.style.display = 'block';
+        
+        if (success) {
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 3000);
+        }
+      }
+      
+      // Événements pour le glisser-déposer
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropzone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }, false);
+      });
+      
+      ['dragenter', 'dragover'].forEach(eventName => {
+        dropzone.addEventListener(eventName, () => {
+          dropzone.classList.add('highlight');
+        }, false);
+      });
+      
+      ['dragleave', 'drop'].forEach(eventName => {
+        dropzone.addEventListener(eventName, () => {
+          dropzone.classList.remove('highlight');
+        }, false);
+      });
+      
+      // Gérer le dépôt de fichiers
+      dropzone.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        addFiles(files);
+      }, false);
+      
+      // Gérer la sélection de fichiers par clic
+      fileInput.addEventListener('change', () => {
+        addFiles(fileInput.files);
+      });
+      
+      // ===== COLLAGE D'IMAGES (OPTIMISÉ POUR IPHONE) =====
+      
+      // Détection de la plateforme
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const pasteZone = document.getElementById('pasteZone');
+      const pasteInput = document.getElementById('pasteInput');
+      const desktopOnly = document.querySelector('.desktop-only');
+      
+      // Adapter l'interface selon la plateforme
+      if (isMobile) {
+        desktopOnly.style.display = 'none';
+        if (!isIOS) {
+          pasteInput.placeholder = "Appuyez ici pour coller";
+        }
+      } else {
+        // Sur desktop, l'input est moins évident
+        pasteInput.style.height = "40px";
+        pasteInput.style.marginBottom = "5px";
+      }
+      
+      // Gestionnaire de collage unifié
+      function handlePaste(e) {
+        console.log("Événement de collage détecté");
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        
+        const clipboardData = e ? (e.clipboardData || window.clipboardData) : null;
+        
+        if (!clipboardData || !clipboardData.items) {
+          console.log("Pas de données dans le presse-papier");
+          return false;
+        }
+        
+        const items = clipboardData.items;
+        console.log("Nombre d'éléments dans le presse-papier:", items.length);
+        
+        // Chercher une image dans les éléments du presse-papier
+        for (let i = 0; i < items.length; i++) {
+          console.log(`Élément ${i}, type:`, items[i].type);
+          
+          if (items[i].type.indexOf('image') !== -1) {
+            console.log("Image trouvée");
+            
+            const file = items[i].getAsFile();
+            if (!file) {
+              console.log("Impossible d'obtenir le fichier");
+              continue;
+            }
+            
+            console.log("Fichier extrait:", file.name, file.type, file.size);
+            
+            // Générer un nom de fichier pour l'image collée
+            const date = new Date();
+            const formattedDate = 
+              date.getFullYear() + 
+              ('0' + (date.getMonth() + 1)).slice(-2) + 
+              ('0' + date.getDate()).slice(-2) + '_' + 
+              ('0' + date.getHours()).slice(-2) + 
+              ('0' + date.getMinutes()).slice(-2) + 
+              ('0' + date.getSeconds()).slice(-2);
+            
+            const extension = file.type.split('/')[1] || 'png';
+            
+            // Créer un nouveau fichier avec un nom personnalisé
+            const newFile = new File(
+              [file], 
+              `image_collée_${formattedDate}.${extension}`,
+              { type: file.type }
+            );
+            
+            // Ajouter à la liste des fichiers
+            addFiles([newFile]);
+            
+            // Vider l'input après traitement réussi
+            pasteInput.value = '';
+            
+            // Feedback visuel
+            showPasteSuccess();
+            return true;
+          }
+        }
+        
+        // Aucune image trouvée
+        console.log("Aucune image trouvée dans le presse-papier");
+        showPasteError("Aucune image trouvée dans le presse-papier");
+        return false;
+      }
+      
+      // Afficher une confirmation de succès
+      function showPasteSuccess() {
+        pasteZone.style.backgroundColor = 'rgba(40, 167, 69, 0.1)';
+        pasteZone.style.borderColor = '#28a745';
+        
+        // Sauvegarder le contenu original
+        const originalContent = pasteZone.innerHTML;
+        
+        // Remplacer par le message de succès
+        pasteZone.innerHTML = '<p style="color: #28a745; font-weight: bold; margin: 20px;">Image collée avec succès !</p>';
+        
+        // Restaurer le contenu original après un délai
+        setTimeout(() => {
+          pasteZone.style.backgroundColor = '';
+          pasteZone.style.borderColor = 'var(--border-color)';
+          pasteZone.innerHTML = originalContent;
+          
+          // Réinitialiser les événements
+          setupPasteEvents();
+        }, 2000);
+      }
+      
+      // Afficher un message d'erreur
+      function showPasteError(message) {
+        pasteZone.style.backgroundColor = 'rgba(220, 53, 69, 0.1)';
+        pasteZone.style.borderColor = '#dc3545';
+        
+        // Sauvegarder le contenu original
+        const originalContent = pasteZone.innerHTML;
+        
+        // Remplacer par le message d'erreur
+        pasteZone.innerHTML = `<p style="color: #dc3545; font-weight: bold; margin: 20px;">${message}</p>`;
+        
+        // Restaurer le contenu original après un délai
+        setTimeout(() => {
+          pasteZone.style.backgroundColor = '';
+          pasteZone.style.borderColor = 'var(--border-color)';
+          pasteZone.innerHTML = originalContent;
+          
+          // Réinitialiser les événements
+          setupPasteEvents();
+        }, 3000);
+      }
+      
+      // Configurer tous les événements de collage
+      function setupPasteEvents() {
+        // Obtenir les nouveaux éléments après un éventuel remplacement du contenu
+        const pasteInput = document.getElementById('pasteInput');
+        
+        // Événement de collage sur l'input
+        pasteInput.addEventListener('paste', handlePaste);
+        
+        // Événement de clic sur la zone pour mettre le focus sur l'input
+        pasteZone.addEventListener('click', (e) => {
+          if (e.target !== pasteInput) {
+            pasteInput.focus();
+          }
+        });
+      }
+      
+      // Événement de collage global (pour desktop)
+      document.addEventListener('paste', (e) => {
+        // Ne traiter que si le focus est dans notre zone
+        if (document.activeElement === pasteZone || 
+            document.activeElement === pasteInput ||
+            pasteZone.contains(document.activeElement)) {
+          handlePaste(e);
+        }
+      });
+      
+      // Configurer les événements de collage initiaux
+      setupPasteEvents();
+      
+      // ===== FIN DU CODE DE COLLAGE =====
+      
+      // Gérer la soumission du formulaire
+      uploadForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const sender = document.getElementById('sender').value;
+        const description = document.getElementById('description').value;
+        
+        if (!sender) {
+          showResultMessage('Veuillez entrer votre nom/pseudo.', false);
+          return;
+        }
+        
+        if (selectedFiles.length === 0) {
+          showResultMessage('Veuillez sélectionner au moins un fichier.', false);
+          return;
+        }
+        
+        // Créer un FormData pour l'envoi
+        const formData = new FormData();
+        formData.append('sender', sender);
+        formData.append('description', description);
+        
+        // Ajouter tous les fichiers
+        selectedFiles.forEach(file => {
+          formData.append('files', file);
+        });
+        
+        // Afficher la barre de progression
+        uploadProgress.style.display = 'block';
+        uploadResult.style.display = 'none';
+        submitBtn.disabled = true;
+        
+        try {
+          const xhr = new XMLHttpRequest();
+          
+          // Configurer la progression
+          xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable) {
+              const percentComplete = Math.round((e.loaded / e.total) * 100);
+              progressBarFill.style.width = percentComplete + '%';
+              progressText.textContent = percentComplete + '%';
+            }
+          });
+          
+          // Configurer la requête
+          xhr.open('POST', '/api/upload', true);
+          
+          // Gérer la réponse
+          xhr.onload = function() {
+            if (xhr.status === 201) {
+              const response = JSON.parse(xhr.responseText);
+              showResultMessage(`${response.message}. Redirection vers la galerie...`, true);
+              
+              // Vider la sélection
+              selectedFiles = [];
+              refreshPreviews();
+            } else {
+              let errorMsg = 'Erreur lors de l\'upload.';
+              try {
+                const response = JSON.parse(xhr.responseText);
+                errorMsg = response.error || errorMsg;
+              } catch (e) {}
+              
+              showResultMessage(errorMsg, false);
+            }
+            
+            // Cacher la barre de progression
+            uploadProgress.style.display = 'none';
+            submitBtn.disabled = false;
+          };
+          
+          // Gérer les erreurs
+          xhr.onerror = function() {
+            showResultMessage('Erreur réseau lors de l\'upload.', false);
+            uploadProgress.style.display = 'none';
+            submitBtn.disabled = false;
+          };
+          
+          // Envoyer la requête
+          xhr.send(formData);
+        } catch (err) {
+          showResultMessage('Erreur: ' + err.message, false);
+          uploadProgress.style.display = 'none';
+          submitBtn.disabled = false;
+        }
+      });
+    });
+  </script>
+</body>
+</html>
+

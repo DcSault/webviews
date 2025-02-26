@@ -1,0 +1,42 @@
+<!-- public/index.html -->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestionnaire de Médias</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>Médiathèque</h1>
+    <nav>
+      <a href="/" class="active">Accueil</a>
+      <a href="/upload.html">Upload</a>
+    </nav>
+  </header>
+  
+  <main>
+    <div class="search-bar">
+      <input type="text" id="searchInput" placeholder="Rechercher par expéditeur ou description...">
+    </div>
+    
+    <div class="filters">
+      <button data-filter="all" class="active">Tous</button>
+      <button data-filter="image">Images</button>
+      <button data-filter="video">Vidéos</button>
+      <button data-filter="audio">Audio</button>
+    </div>
+    
+    <div class="media-grid" id="mediaGrid">
+      <!-- Les médias seront injectés ici via JavaScript -->
+    </div>
+  </main>
+  
+  <footer>
+    <p>© 2025 - Gestionnaire de Médias</p>
+  </footer>
+  
+  <script src="app.js"></script>
+</body>
+</html>
