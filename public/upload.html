@@ -514,26 +514,14 @@
         updateSubmitButton();
       }
       
-      // Ajouter des fichiers à la sélection
+      // Ajouter des fichiers à la sélection sans vérification de limite
       function addFiles(files) {
-        // Vérifier si l'utilisateur a sélectionné trop de fichiers
-        if (selectedFiles.length + files.length > 10) {
-          showResultMessage('Vous ne pouvez pas uploader plus de 10 fichiers à la fois.', false);
-          return;
-        }
-        
-        // Ajouter chaque fichier
+        // Ajouter chaque fichier sans vérification de limite
         Array.from(files).forEach(file => {
-          // Vérifier la taille du fichier
-          if (file.size > 50 * 1024 * 1024) {
-            showResultMessage(`Le fichier "${file.name}" est trop volumineux. La taille maximale est de 50MB.`, false);
-            return;
-          }
-          
           selectedFiles.push(file);
           createPreview(file, selectedFiles.length - 1);
         });
-        
+
         updateSubmitButton();
       }
       
