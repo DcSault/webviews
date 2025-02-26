@@ -12,6 +12,16 @@ require('dotenv').config();
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Augmenter les limites globales d'Express
+app.use(express.json({limit: '10240mb'}));
+app.use(express.urlencoded({extended: true, limit: '10240mb'}));
+
+// Augmenter le timeout
+app.use((req, res, next) => {
+    res.setTimeout(3600000); // 1 heure
+    next();
+});
+
 // Création des répertoires nécessaires
 const dataDir = path.join(__dirname, 'data');
 const mediaDir = path.join(dataDir, 'media');
@@ -151,9 +161,11 @@ const storage = multer.diskStorage({
 const upload = multer({
     storage: storage,
     limits: {
-        fileSize: 50 * 1024 * 1024 // 50MB limite de taille
+        fileSize: 10 * 1024 * 1024 * 1024, // 10GB limite de taille
+        files: 100 // Nombre maximum de fichiers
     },
     fileFilter: function (req, file, cb) {
+        // Accepter tous les types de fichiers
         cb(null, true);
     }
 });
@@ -194,7 +206,7 @@ app.get('/api/media', async (req, res) => {
 });
 
 // Route pour l'upload de médias
-app.post('/api/upload', upload.array('files', 10), async (req, res) => {
+app.post('/api/upload', upload.array('files', 100), async (req, res) => {
     try {
         const files = req.files;
         const { sender, description } = req.body;
