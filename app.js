@@ -84,7 +84,7 @@ app.post('/login', express.json(), (req, res) => {
     const { username, password } = req.body;
 
     // Vérification des identifiants
-    if (username === 'admin' && password === '2404') {
+    if (username === 'admin' && password === 'wdTskYGraa42hEx3aUsE') {
         req.session.authenticated = true;
         res.json({ success: true });
     } else {
