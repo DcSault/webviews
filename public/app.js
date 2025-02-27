@@ -58,54 +58,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Ajouter dans votre app.js client-side ou dans un <script> à la fin de upload.html
-document.addEventListener('DOMContentLoaded', () => {
-  const gofileForm = document.getElementById('gofile-form');
-  const gofileStatus = document.getElementById('gofile-status');
-  
-  if (gofileForm) {
-    gofileForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      
-      const urlInput = document.getElementById('gofile-url');
-      const url = urlInput.value.trim();
-      
-      if (!url) {
-        gofileStatus.innerHTML = '<div class="alert alert-danger">Veuillez entrer une URL ou un ID Gofile valide</div>';
-        return;
-      }
-      
-      gofileStatus.innerHTML = '<div class="alert alert-info">Téléchargement en cours... Cela peut prendre plusieurs minutes selon la taille et le nombre de fichiers.</div>';
-      
-      try {
-        const response = await fetch('/api/gofile-download', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ url }),
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-          gofileStatus.innerHTML = '<div class="alert alert-success">Téléchargement réussi ! Les fichiers ont été ajoutés à la médiathèque.</div>';
-          
-          // Optionnel : rafraîchir la galerie après quelques secondes
-          setTimeout(() => {
-            window.location.reload();
-          }, 3000);
-        } else {
-          gofileStatus.innerHTML = `<div class="alert alert-danger">Erreur: ${data.message}</div>`;
-          console.error(data.details);
-        }
-      } catch (error) {
-        gofileStatus.innerHTML = `<div class="alert alert-danger">Erreur de connexion: ${error.message}</div>`;
-      }
-    });
-  }
-});
-
   // Création des éléments média
   function createMediaElement(item) {
     const card = document.createElement('div');
