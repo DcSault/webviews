@@ -6,6 +6,75 @@
   <title>Upload de médias</title>
   <link rel="stylesheet" href="styles.css">
   <style>
+
+    /* Ajouter à votre styles.css */
+.gofile-section {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  background-color: #f8f9fa;
+}
+
+.gofile-section h3 {
+  margin-bottom: 1rem;
+  color: #333;
+}
+
+#gofile-form .form-group {
+  margin-bottom: 1rem;
+}
+
+#gofile-form input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+#gofile-form button {
+  padding: 0.5rem 1rem;
+  background-color: #0d6efd;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#gofile-form button:hover {
+  background-color: #0b5ed7;
+}
+
+#gofile-status {
+  margin-top: 1rem;
+}
+
+.alert {
+  padding: 0.75rem 1.25rem;
+  margin-bottom: 1rem;
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+}
+
+.alert-info {
+  color: #0c5460;
+  background-color: #d1ecf1;
+  border-color: #bee5eb;
+}
+
+.alert-success {
+  color: #155724;
+  background-color: #d4edda;
+  border-color: #c3e6cb;
+}
+
+.alert-danger {
+  color: #721c24;
+  background-color: #f8d7da;
+  border-color: #f5c6cb;
+}
+
+
     .upload-container {
       max-width: 800px;
       margin: 0 auto;
@@ -283,8 +352,70 @@
     </nav>
     <button id="themeToggle" class="theme-toggle" title="Changer de thème">🌙</button>
   </header>
-  
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const gofileForm = document.getElementById('gofile-form');
+      const gofileStatus = document.getElementById('gofile-status');
+      
+      if (gofileForm) {
+        gofileForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          
+          const urlInput = document.getElementById('gofile-url');
+          const url = urlInput.value.trim();
+          
+          if (!url) {
+            gofileStatus.innerHTML = '<div class="alert alert-danger">Veuillez entrer une URL ou un ID Gofile valide</div>';
+            return;
+          }
+          
+          gofileStatus.innerHTML = '<div class="alert alert-info">Téléchargement en cours... Cela peut prendre plusieurs minutes selon la taille et le nombre de fichiers.</div>';
+          
+          try {
+            const response = await fetch('/api/gofile-download', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ url }),
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+              gofileStatus.innerHTML = '<div class="alert alert-success">Téléchargement réussi ! Les fichiers ont été ajoutés à la médiathèque.</div>';
+              
+              // Optionnel : rafraîchir la galerie après quelques secondes
+              setTimeout(() => {
+                window.location.reload();
+              }, 3000);
+            } else {
+              gofileStatus.innerHTML = `<div class="alert alert-danger">Erreur: ${data.message}</div>`;
+              console.error(data.details);
+            }
+          } catch (error) {
+            gofileStatus.innerHTML = `<div class="alert alert-danger">Erreur de connexion: ${error.message}</div>`;
+            console.error('Erreur complète:', error);
+          }
+        });
+      } else {
+        console.error("Le formulaire Gofile n'a pas été trouvé dans le DOM");
+      }
+    });
+    </script>    
   <main>
+    <div class="gofile-section">
+      <h3>Télécharger depuis Gofile.io</h3>
+      <form id="gofile-form">
+        <div class="form-group">
+          <label for="gofile-url">URL ou ID Gofile:</label>
+          <input type="text" id="gofile-url" name="gofile-url" 
+                 placeholder="APYNhx ou https://gofile.io/d/APYNhx" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Télécharger depuis Gofile</button>
+      </form>
+      <div id="gofile-status" class="mt-3"></div>
+    </div>
     <div class="upload-container">
       <h2>Upload de médias</h2>
       

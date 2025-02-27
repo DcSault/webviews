@@ -13,6 +13,74 @@
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
+/* Ajouter à votre styles.css */
+.gofile-section {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  background-color: #f8f9fa;
+}
+
+.gofile-section h3 {
+  margin-bottom: 1rem;
+  color: #333;
+}
+
+#gofile-form .form-group {
+  margin-bottom: 1rem;
+}
+
+#gofile-form input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+#gofile-form button {
+  padding: 0.5rem 1rem;
+  background-color: #0d6efd;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#gofile-form button:hover {
+  background-color: #0b5ed7;
+}
+
+#gofile-status {
+  margin-top: 1rem;
+}
+
+.alert {
+  padding: 0.75rem 1.25rem;
+  margin-bottom: 1rem;
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+}
+
+.alert-info {
+  color: #0c5460;
+  background-color: #d1ecf1;
+  border-color: #bee5eb;
+}
+
+.alert-success {
+  color: #155724;
+  background-color: #d4edda;
+  border-color: #c3e6cb;
+}
+
+.alert-danger {
+  color: #721c24;
+  background-color: #f8d7da;
+  border-color: #f5c6cb;
+}
+
+
 /* Style du bouton de flou */
 .blur-btn {
   background-color: var(--primary-color);
