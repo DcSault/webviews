@@ -275,115 +275,116 @@
   </style>
 </head>
 <body>
-  <header>
-    <h1>Médiathèque</h1>
-    <nav>
-      <a href="/">Accueil</a>
-      <a href="/upload.html" class="active">Upload</a>
-    </nav>
-    <button id="themeToggle" class="theme-toggle" title="Changer de thème">🌙</button>
-  </header>
+  <div class="container">
+    <header>
+      <nav>
+        <a href="/" class="nav-link">Accueil</a>
+        <a href="/upload.html" class="nav-link active">Upload</a>
+        <a href="/gofile.html" class="nav-link">Gofile</a>
+      </nav>
+    </header>
   
-  <main>
-    <div class="upload-container">
-      <h2>Upload de médias</h2>
-      
-      <form id="uploadForm" class="upload-form">
-        <div class="form-group">
-          <label for="sender">Nom/Pseudo</label>
-          <input type="text" id="sender" name="sender" required placeholder="Votre nom ou pseudo">
-        </div>
+    <main>
+      <div class="upload-container">
+        <h2>Upload de médias</h2>
         
-        <div class="form-group">
-          <label for="description">Description</label>
-          <textarea id="description" name="description" rows="3" placeholder="Description du média (optionnel)"></textarea>
-        </div>
-        
-        <div class="form-group">
-          <label>Fichiers</label>
-          <div id="dropzone" class="dropzone">
-            <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <form id="uploadForm" class="upload-form">
+          <div class="form-group">
+            <label for="sender">Nom/Pseudo</label>
+            <input type="text" id="sender" name="sender" required placeholder="Votre nom ou pseudo">
+          </div>
+          
+          <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description" name="description" rows="3" placeholder="Description du média (optionnel)"></textarea>
+          </div>
+          
+          <div class="form-group">
+            <label>Fichiers</label>
+            <div id="dropzone" class="dropzone">
+              <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              <p>Glissez-déposez vos fichiers ici ou cliquez pour sélectionner</p>
+              <small>Tous types de fichiers acceptés</small>
+              <input type="file" id="fileInput" multiple>
+            </div>
+            
+            <div id="previewContainer" class="preview-container"></div>
+          </div>
+          
+          <!-- Zone de collage optimisée pour iPhone -->
+          <div class="form-group">
+            <label>Coller depuis le presse-papier</label>
+            <div id="pasteZone" class="paste-zone">
+              <p>Collez une image depuis votre appareil</p>
+              
+              <!-- Input visible pour iOS -->
+              <input type="text" id="pasteInput" 
+                    placeholder="Appuyez ici, puis appuyez longuement pour coller" 
+                    style="width: 100%; padding: 12px; margin: 10px 0; border: 1px solid var(--border-color); border-radius: var(--border-radius);">
+              
+              <!-- Message pour desktop -->
+              <p class="desktop-only" style="font-size: 0.8em; margin-top: 10px;">Sur ordinateur : cliquez n'importe où dans cette zone et utilisez Ctrl+V / Cmd+V</p>
+            </div>
+          </div>
+          
+          <button type="submit" id="submitBtn" class="submit-btn" disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
               <polyline points="17 8 12 3 7 8"></polyline>
               <line x1="12" y1="3" x2="12" y2="15"></line>
             </svg>
-            <p>Glissez-déposez vos fichiers ici ou cliquez pour sélectionner</p>
-            <small>Tous types de fichiers acceptés</small>
-            <input type="file" id="fileInput" multiple>
+            Uploader
+          </button>
+        </form>
+        
+        <div id="uploadProgress" class="upload-progress">
+          <p>Upload en cours... <span id="progressText">0%</span></p>
+          <div class="progress-bar">
+            <div id="progressBarFill" class="progress-bar-fill"></div>
           </div>
+        </div>
+        
+        <div id="uploadResult" class="upload-result"></div>
+        
+        <div class="instructions">
+          <h3>Comment ajouter des médias</h3>
           
-          <div id="previewContainer" class="preview-container"></div>
-        </div>
-        
-        <!-- Zone de collage optimisée pour iPhone -->
-        <div class="form-group">
-          <label>Coller depuis le presse-papier</label>
-          <div id="pasteZone" class="paste-zone">
-            <p>Collez une image depuis votre appareil</p>
-            
-            <!-- Input visible pour iOS -->
-            <input type="text" id="pasteInput" 
-                  placeholder="Appuyez ici, puis appuyez longuement pour coller" 
-                  style="width: 100%; padding: 12px; margin: 10px 0; border: 1px solid var(--border-color); border-radius: var(--border-radius);">
-            
-            <!-- Message pour desktop -->
-            <p class="desktop-only" style="font-size: 0.8em; margin-top: 10px;">Sur ordinateur : cliquez n'importe où dans cette zone et utilisez Ctrl+V / Cmd+V</p>
-          </div>
-        </div>
-        
-        <button type="submit" id="submitBtn" class="submit-btn" disabled>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="17 8 12 3 7 8"></polyline>
-            <line x1="12" y1="3" x2="12" y2="15"></line>
-          </svg>
-          Uploader
-        </button>
-      </form>
-      
-      <div id="uploadProgress" class="upload-progress">
-        <p>Upload en cours... <span id="progressText">0%</span></p>
-        <div class="progress-bar">
-          <div id="progressBarFill" class="progress-bar-fill"></div>
+          <h4>Téléverser des fichiers :</h4>
+          <ul>
+            <li><strong>Glisser-déposer :</strong> Faites glisser vos fichiers directement dans la zone de dépôt.</li>
+            <li><strong>Sélection manuelle :</strong> Cliquez sur la zone de dépôt pour sélectionner des fichiers.</li>
+          </ul>
+          
+          <h4>Coller une image :</h4>
+          <ol>
+            <li><strong>Sur iPhone ou iPad :</strong> 
+              <ul>
+                <li>Copiez une image depuis Photos ou une autre application</li>
+                <li>Appuyez sur le champ de texte dans la zone de collage</li>
+                <li>Appuyez <strong>longuement</strong> sur le champ jusqu'à voir apparaître "Coller"</li>
+                <li>Appuyez sur "Coller"</li>
+              </ul>
+            </li>
+            <li><strong>Sur ordinateur :</strong>
+              <ul>
+                <li>Copiez une image (Ctrl+C ou Cmd+C)</li>
+                <li>Cliquez dans la zone de collage</li>
+                <li>Collez avec Ctrl+V ou Cmd+V</li>
+              </ul>
+            </li>
+          </ol>
         </div>
       </div>
-      
-      <div id="uploadResult" class="upload-result"></div>
-      
-      <div class="instructions">
-        <h3>Comment ajouter des médias</h3>
-        
-        <h4>Téléverser des fichiers :</h4>
-        <ul>
-          <li><strong>Glisser-déposer :</strong> Faites glisser vos fichiers directement dans la zone de dépôt.</li>
-          <li><strong>Sélection manuelle :</strong> Cliquez sur la zone de dépôt pour sélectionner des fichiers.</li>
-        </ul>
-        
-        <h4>Coller une image :</h4>
-        <ol>
-          <li><strong>Sur iPhone ou iPad :</strong> 
-            <ul>
-              <li>Copiez une image depuis Photos ou une autre application</li>
-              <li>Appuyez sur le champ de texte dans la zone de collage</li>
-              <li>Appuyez <strong>longuement</strong> sur le champ jusqu'à voir apparaître "Coller"</li>
-              <li>Appuyez sur "Coller"</li>
-            </ul>
-          </li>
-          <li><strong>Sur ordinateur :</strong>
-            <ul>
-              <li>Copiez une image (Ctrl+C ou Cmd+C)</li>
-              <li>Cliquez dans la zone de collage</li>
-              <li>Collez avec Ctrl+V ou Cmd+V</li>
-            </ul>
-          </li>
-        </ol>
-      </div>
-    </div>
-  </main>
-  
-  <footer>
-    <p>© 2025 - Gestionnaire de Médias</p>
-  </footer>
+    </main>
+    
+    <footer>
+      <p>© 2025 - Gestionnaire de Médias</p>
+    </footer>
+  </div>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       const uploadForm = document.getElementById('uploadForm');

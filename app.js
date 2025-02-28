@@ -7,6 +7,7 @@ const morgan = require('morgan');
 const session = require('express-session'); // Pour la gestion des sessions
 const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
+const { lancerExtraction } = require('./gofile_debrid');
 
 // Configuration de l'application
 const app = express();
@@ -129,6 +130,10 @@ app.get('/', requireAuth, (req, res) => {
 
 app.get('/upload.html', requireAuth, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'upload.html'));
+});
+
+app.get('/gofile.html', requireAuth, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'gofile.html'));
 });
 
 // Servir les fichiers statiques
@@ -291,6 +296,53 @@ app.delete('/api/media/:id', async (req, res) => {
     } catch (err) {
         console.error('Erreur lors de la suppression du média :', err);
         res.status(500).json({ error: 'Erreur lors de la suppression du média' });
+    }
+});
+
+// Route pour l'extraction Gofile
+app.post('/api/gofile/extract', async (req, res) => {
+    try {
+        const { url } = req.body;
+        if (!url) {
+            return res.status(400).json({ error: 'URL Gofile requise' });
+        }
+
+        // Lancer l'extraction en arrière-plan
+        const downloadFolder = path.join(mediaDir, 'gofile_downloads');
+        
+        // Créer une promesse pour gérer l'extraction et la mise à jour des métadonnées
+        const extractionPromise = lancerExtraction(url, downloadFolder)
+            .then(async (downloadedFiles) => {
+                if (downloadedFiles && downloadedFiles.length > 0) {
+                    // Mettre à jour les métadonnées
+                    const metadata = await getMetadata();
+                    metadata.push(...downloadedFiles);
+                    await saveMetadata(metadata);
+                    return downloadedFiles.length;
+                }
+                return 0;
+            })
+            .catch(err => {
+                console.error('Erreur lors de l\'extraction Gofile :', err);
+                throw err;
+            });
+
+        // Répondre immédiatement à la requête
+        res.status(202).json({ 
+            message: 'Extraction Gofile démarrée. Les fichiers seront disponibles une fois le téléchargement terminé.',
+            downloadFolder
+        });
+
+        // Gérer l'extraction en arrière-plan
+        extractionPromise.then(fileCount => {
+            console.log(`Extraction terminée : ${fileCount} fichier(s) traité(s)`);
+        }).catch(err => {
+            console.error('Erreur pendant l\'extraction :', err);
+        });
+
+    } catch (err) {
+        console.error('Erreur lors du traitement de la requête Gofile :', err);
+        res.status(500).json({ error: 'Erreur lors du traitement de la requête Gofile' });
     }
 });
 

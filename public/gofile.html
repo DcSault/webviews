@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Extraction Gofile</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .gofile-container {
+      max-width: 800px;
+      margin: 0 auto;
+      background-color: var(--card-bg);
+      border-radius: var(--border-radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    
+    .gofile-form {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    .form-group label {
+      font-weight: 500;
+    }
+    
+    .form-group input {
+      padding: 12px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius);
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: inherit;
+      width: 100%;
+    }
+
+    .status-container {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: var(--border-radius);
+      background-color: var(--bg-color);
+      display: none;
+    }
+
+    .status-container.success {
+      display: block;
+      background-color: rgba(40, 167, 69, 0.1);
+      border: 1px solid #28a745;
+    }
+
+    .status-container.error {
+      display: block;
+      background-color: rgba(220, 53, 69, 0.1);
+      border: 1px solid #dc3545;
+    }
+
+    .btn-container {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: var(--border-radius);
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-primary {
+      background-color: var(--primary-color);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background-color: var(--primary-color-dark);
+    }
+
+    .btn-secondary {
+      background-color: var(--border-color);
+      color: var(--text-color);
+    }
+
+    .btn-secondary:hover {
+      background-color: var(--border-color-dark);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <nav>
+        <a href="/" class="nav-link">Accueil</a>
+        <a href="/upload.html" class="nav-link">Upload</a>
+        <a href="/gofile.html" class="nav-link active">Gofile</a>
+      </nav>
+    </header>
+
+    <main>
+      <div class="gofile-container">
+        <h1>Extraction Gofile</h1>
+        <form id="gofileForm" class="gofile-form">
+          <div class="form-group">
+            <label for="gofileUrl">URL Gofile</label>
+            <input type="url" id="gofileUrl" name="url" required 
+                   placeholder="https://gofile.io/..." 
+                   pattern="https://gofile\.io/.*"
+                   title="L'URL doit commencer par https://gofile.io/">
+          </div>
+
+          <div class="btn-container">
+            <button type="submit" class="btn btn-primary">Extraire</button>
+            <button type="reset" class="btn btn-secondary">Réinitialiser</button>
+          </div>
+        </form>
+
+        <div id="statusContainer" class="status-container">
+          <p id="statusMessage"></p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    document.getElementById('gofileForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const statusContainer = document.getElementById('statusContainer');
+      const statusMessage = document.getElementById('statusMessage');
+      const url = document.getElementById('gofileUrl').value;
+
+      try {
+        const response = await fetch('/api/gofile/extract', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ url })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          statusContainer.className = 'status-container success';
+          statusMessage.textContent = data.message;
+        } else {
+          statusContainer.className = 'status-container error';
+          statusMessage.textContent = data.error || 'Une erreur est survenue';
+        }
+      } catch (error) {
+        statusContainer.className = 'status-container error';
+        statusMessage.textContent = 'Erreur de connexion au serveur';
+      }
+    });
+
+    document.getElementById('gofileForm').addEventListener('reset', () => {
+      const statusContainer = document.getElementById('statusContainer');
+      statusContainer.style.display = 'none';
+    });
+  </script>
+</body>
+</html> 
