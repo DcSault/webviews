@@ -47,7 +47,7 @@ async function lancerExtraction(urlGofile, downloadFolder) {
   await fsPromises.mkdir(tempDownloadFolder, { recursive: true });
 
   try {
-    // Configuration de Puppeteer pour utiliser Chrome portable
+    // Configuration de Puppeteer pour Alpine Linux
     const options = {
       headless: "new",
       args: [
@@ -55,15 +55,12 @@ async function lancerExtraction(urlGofile, downloadFolder) {
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-gpu',
-        '--window-size=1280,800'
+        '--window-size=1280,800',
+        '--disable-software-rasterizer',
+        '--disable-dev-tools'
       ],
       defaultViewport: { width: 1280, height: 800 },
-      // Utiliser le chemin vers Chrome portable ou le Chrome par défaut du système
-      executablePath: process.platform === 'win32' 
-        ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'  // Windows
-        : process.platform === 'darwin'
-          ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' // MacOS
-          : '/usr/bin/google-chrome', // Linux
+      executablePath: '/usr/bin/chromium-browser',
       ignoreDefaultArgs: ['--disable-extensions']
     };
 
@@ -75,29 +72,17 @@ async function lancerExtraction(urlGofile, downloadFolder) {
     } catch (error) {
       console.error('Erreur lors du premier essai:', error);
       
-      // Si la première tentative échoue, essayer avec des chemins alternatifs
-      const alternativePaths = {
-        win32: [
-          'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-          process.env.LOCALAPPDATA + '\\Google\\Chrome\\Application\\chrome.exe',
-          process.env.PROGRAMFILES + '\\Google\\Chrome\\Application\\chrome.exe',
-          process.env['PROGRAMFILES(X86)'] + '\\Google\\Chrome\\Application\\chrome.exe'
-        ],
-        darwin: [
-          '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-          '~/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-        ],
-        linux: [
-          '/usr/bin/google-chrome-stable',
-          '/usr/bin/chromium-browser',
-          '/usr/bin/chromium',
-          '/snap/bin/chromium'
-        ]
-      };
+      // Chemins alternatifs spécifiques à Alpine Linux
+      const alpinePaths = [
+        '/usr/bin/chromium',
+        '/usr/bin/chromium-browser',
+        '/usr/lib/chromium/chromium',
+        '/usr/lib/chromium-browser/chromium-browser'
+      ];
 
-      const paths = alternativePaths[process.platform] || [];
-      for (const path of paths) {
+      for (const path of alpinePaths) {
         try {
+          console.log(`Tentative avec le chemin: ${path}`);
           options.executablePath = path;
           browser = await puppeteer.launch(options);
           console.log('Navigateur lancé avec succès en utilisant:', path);
@@ -108,7 +93,8 @@ async function lancerExtraction(urlGofile, downloadFolder) {
       }
 
       if (!browser) {
-        throw new Error('Impossible de trouver Chrome. Veuillez installer Google Chrome et réessayer.');
+        console.error('Installation de Chromium nécessaire. Exécutez: apk add chromium');
+        throw new Error('Chromium non trouvé. Installez-le avec: apk add chromium');
       }
     }
 
