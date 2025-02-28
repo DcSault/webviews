@@ -460,3 +460,26 @@ footer {
 .media-card {
   animation: fadeIn 0.3s ease forwards;
 }
+
+.video-error {
+  background-color: rgba(220, 53, 69, 0.1);
+  border: 1px solid #dc3545;
+  padding: 10px;
+  margin-top: 10px;
+  border-radius: var(--border-radius);
+  text-align: center;
+}
+
+.video-error button {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 5px 15px;
+  border-radius: var(--border-radius);
+  margin-top: 5px;
+  cursor: pointer;
+}
+
+.video-error button:hover {
+  background-color: var(--primary-color-dark);
+}

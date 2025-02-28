@@ -81,10 +81,37 @@ document.addEventListener('DOMContentLoaded', () => {
       mediaElement.src = `/${item.filePath}`;
       mediaElement.controls = true;
       mediaElement.preload = 'metadata';
+      mediaElement.playsInline = true;
+      mediaElement.crossOrigin = 'anonymous';
+      mediaElement.style.width = '100%';
+      mediaElement.style.maxHeight = '500px';
+      
+      // Ajout des gestionnaires d'événements pour le débogage et la gestion des erreurs
+      mediaElement.addEventListener('error', (e) => {
+        console.error('Erreur de lecture vidéo:', e.target.error);
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'video-error';
+        errorDiv.innerHTML = `
+          <p>Erreur de chargement de la vidéo</p>
+          <button onclick="this.parentElement.previousElementSibling.load()">Réessayer</button>
+        `;
+        mediaElement.parentElement.appendChild(errorDiv);
+      });
+
+      mediaElement.addEventListener('loadedmetadata', () => {
+        console.log('Métadonnées vidéo chargées:', {
+          durée: mediaElement.duration,
+          largeur: mediaElement.videoWidth,
+          hauteur: mediaElement.videoHeight
+        });
+      });
+
       contentDiv.addEventListener('click', (e) => {
         if (e.target !== mediaElement) {
           if (mediaElement.paused) {
-            mediaElement.play();
+            mediaElement.play().catch(err => {
+              console.error('Erreur lors de la lecture:', err);
+            });
           } else {
             mediaElement.pause();
           }
