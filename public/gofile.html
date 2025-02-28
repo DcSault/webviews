@@ -3,211 +3,168 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gofile Extractor</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <title>Extraction Gofile</title>
+  <link rel="stylesheet" href="styles.css">
   <style>
-    .extraction-card {
-      margin-bottom: 1rem;
+    .gofile-container {
+      max-width: 800px;
+      margin: 0 auto;
+      background-color: var(--card-bg);
+      border-radius: var(--border-radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
     }
-    .progress {
-      height: 25px;
+    
+    .gofile-form {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
     }
-    .status-badge {
-      font-size: 0.9em;
+    
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
-    #urlInput {
-      min-height: 100px;
+    
+    .form-group label {
+      font-weight: 500;
+    }
+    
+    .form-group input {
+      padding: 12px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius);
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: inherit;
+      width: 100%;
+    }
+
+    .status-container {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: var(--border-radius);
+      background-color: var(--bg-color);
+      display: none;
+    }
+
+    .status-container.success {
+      display: block;
+      background-color: rgba(40, 167, 69, 0.1);
+      border: 1px solid #28a745;
+    }
+
+    .status-container.error {
+      display: block;
+      background-color: rgba(220, 53, 69, 0.1);
+      border: 1px solid #dc3545;
+    }
+
+    .btn-container {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: var(--border-radius);
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-primary {
+      background-color: var(--primary-color);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background-color: var(--primary-color-dark);
+    }
+
+    .btn-secondary {
+      background-color: var(--border-color);
+      color: var(--text-color);
+    }
+
+    .btn-secondary:hover {
+      background-color: var(--border-color-dark);
     }
   </style>
 </head>
 <body>
-  <div class="container mt-4">
-    <h1>Gofile Extractor</h1>
-    
-    <!-- Formulaire d'extraction -->
-    <div class="card mb-4">
-      <div class="card-body">
-        <h5 class="card-title">Nouvelle extraction</h5>
-        <form id="extractionForm">
-          <div class="mb-3">
-            <label for="urlInput" class="form-label">URLs Gofile (une par ligne)</label>
-            <textarea class="form-control" id="urlInput" rows="4" placeholder="https://gofile.io/d/xxxxxx"></textarea>
-          </div>
-          <div class="mb-3">
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" id="parallelMode">
-              <label class="form-check-label" for="parallelMode">
-                Mode parallèle
-              </label>
-            </div>
-          </div>
-          <button type="submit" class="btn btn-primary">Lancer l'extraction</button>
-        </form>
-      </div>
-    </div>
+  <div class="container">
+    <header>
+      <nav>
+        <a href="/" class="nav-link">Accueil</a>
+        <a href="/upload.html" class="nav-link">Upload</a>
+        <a href="/gofile.html" class="nav-link active">Gofile</a>
+      </nav>
+    </header>
 
-    <!-- Liste des extractions en cours -->
-    <div id="extractionsList">
-      <!-- Les cartes d'extraction seront ajoutées ici dynamiquement -->
-    </div>
+    <main>
+      <div class="gofile-container">
+        <h1>Extraction Gofile</h1>
+        <form id="gofileForm" class="gofile-form">
+          <div class="form-group">
+            <label for="gofileUrl">URL Gofile</label>
+            <input type="url" id="gofileUrl" name="url" required 
+                   placeholder="https://gofile.io/..." 
+                   pattern="https://gofile\.io/.*"
+                   title="L'URL doit commencer par https://gofile.io/">
+          </div>
+
+          <div class="btn-container">
+            <button type="submit" class="btn btn-primary">Extraire</button>
+            <button type="reset" class="btn btn-secondary">Réinitialiser</button>
+          </div>
+        </form>
+
+        <div id="statusContainer" class="status-container">
+          <p id="statusMessage"></p>
+        </div>
+      </div>
+    </main>
   </div>
 
-  <!-- Template pour une carte d'extraction -->
-  <template id="extractionTemplate">
-    <div class="card extraction-card">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <h5 class="card-title mb-0">
-            <span class="url-display"></span>
-          </h5>
-          <span class="status-badge badge"></span>
-        </div>
-        <p class="message mb-2"></p>
-        <div class="progress">
-          <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"></div>
-        </div>
-        <div class="details mt-2">
-          <!-- Détails supplémentaires seront ajoutés ici -->
-        </div>
-      </div>
-    </div>
-  </template>
-
   <script>
-    class ExtractionManager {
-      constructor() {
-        this.extractions = new Map();
-        this.ws = new WebSocket(`ws://${window.location.hostname}:3001`);
-        this.setupWebSocket();
-        this.setupForm();
-      }
+    document.getElementById('gofileForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const statusContainer = document.getElementById('statusContainer');
+      const statusMessage = document.getElementById('statusMessage');
+      const url = document.getElementById('gofileUrl').value;
 
-      setupWebSocket() {
-        this.ws.onopen = () => console.log('WebSocket connecté');
-        this.ws.onmessage = (event) => this.handleWebSocketMessage(event);
-        this.ws.onerror = (error) => console.error('Erreur WebSocket:', error);
-        this.ws.onclose = () => console.log('WebSocket déconnecté');
-      }
-
-      setupForm() {
-        document.getElementById('extractionForm').addEventListener('submit', (e) => {
-          e.preventDefault();
-          this.startNewExtraction();
-        });
-      }
-
-      startNewExtraction() {
-        const urlsText = document.getElementById('urlInput').value.trim();
-        const urls = urlsText.split('\n').filter(url => url.trim());
-        const parallel = document.getElementById('parallelMode').checked;
-
-        if (urls.length === 0) return;
-
-        fetch('/api/extract', {
+      try {
+        const response = await fetch('/api/gofile/extract', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ urls, parallel })
-        })
-        .then(response => response.json())
-        .then(data => {
-          if (data.extractionIds) {
-            data.extractionIds.forEach(id => {
-              this.createExtractionCard(id, urls[0]);
-              this.ws.send(JSON.stringify({
-                type: 'subscribe',
-                extractionId: id
-              }));
-            });
-          }
-        })
-        .catch(error => console.error('Erreur:', error));
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ url })
+        });
 
-        document.getElementById('urlInput').value = '';
-      }
+        const data = await response.json();
 
-      createExtractionCard(extractionId, url) {
-        const template = document.getElementById('extractionTemplate');
-        const card = template.content.cloneNode(true);
-        
-        const container = document.createElement('div');
-        container.id = `extraction-${extractionId}`;
-        container.appendChild(card);
-        
-        container.querySelector('.url-display').textContent = url;
-        container.querySelector('.progress-bar').style.width = '0%';
-        
-        document.getElementById('extractionsList').prepend(container);
-        this.extractions.set(extractionId, container);
-      }
-
-      updateExtractionProgress(data) {
-        const container = this.extractions.get(data.extractionId);
-        if (!container) return;
-
-        const statusBadge = container.querySelector('.status-badge');
-        const progressBar = container.querySelector('.progress-bar');
-        const message = container.querySelector('.message');
-        const details = container.querySelector('.details');
-
-        // Mettre à jour le statut
-        statusBadge.textContent = data.status;
-        statusBadge.className = 'status-badge badge ' + this.getStatusClass(data.status);
-
-        // Mettre à jour la barre de progression
-        if (data.progress !== undefined) {
-          progressBar.style.width = `${data.progress}%`;
-          progressBar.setAttribute('aria-valuenow', data.progress);
+        if (response.ok) {
+          statusContainer.className = 'status-container success';
+          statusMessage.textContent = data.message;
+        } else {
+          statusContainer.className = 'status-container error';
+          statusMessage.textContent = data.error || 'Une erreur est survenue';
         }
-
-        // Mettre à jour le message
-        message.textContent = data.message;
-
-        // Mettre à jour les détails
-        if (data.downloadedCount !== undefined && data.totalFiles !== undefined) {
-          details.innerHTML = `
-            <small class="text-muted">
-              Fichiers: ${data.downloadedCount}/${data.totalFiles}
-            </small>
-          `;
-        }
-
-        // Si terminé, supprimer après un délai
-        if (data.status === 'complete' || data.status === 'error') {
-          setTimeout(() => {
-            container.remove();
-            this.extractions.delete(data.extractionId);
-          }, 30000);
-        }
+      } catch (error) {
+        statusContainer.className = 'status-container error';
+        statusMessage.textContent = 'Erreur de connexion au serveur';
       }
+    });
 
-      getStatusClass(status) {
-        const classes = {
-          'start': 'bg-info',
-          'navigating': 'bg-primary',
-          'scanning': 'bg-primary',
-          'downloading': 'bg-primary',
-          'processing': 'bg-info',
-          'complete': 'bg-success',
-          'error': 'bg-danger'
-        };
-        return classes[status] || 'bg-secondary';
-      }
-
-      handleWebSocketMessage(event) {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'progress') {
-            this.updateExtractionProgress(data);
-          }
-        } catch (error) {
-          console.error('Erreur de parsing:', error);
-        }
-      }
-    }
-
-    // Initialiser le gestionnaire d'extraction
-    document.addEventListener('DOMContentLoaded', () => {
-      window.extractionManager = new ExtractionManager();
+    document.getElementById('gofileForm').addEventListener('reset', () => {
+      const statusContainer = document.getElementById('statusContainer');
+      statusContainer.style.display = 'none';
     });
   </script>
 </body>
