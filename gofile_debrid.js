@@ -209,7 +209,10 @@ async function moveAndSortDownloads(downloadFolder) {
         console.log(`Déplacement de ${file} vers ${destinationPath}`);
         
         try {
-          await fsPromises.rename(filePath, destinationPath);
+          // Copier le fichier au lieu de le déplacer
+          await fsPromises.copyFile(filePath, destinationPath);
+          // Supprimer le fichier source après la copie
+          await fsPromises.unlink(filePath);
 
           // Créer les métadonnées pour le fichier
           downloadedFiles.push({
