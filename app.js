@@ -7,7 +7,7 @@ const morgan = require('morgan');
 const session = require('express-session'); // Pour la gestion des sessions
 const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
-const { lancerExtraction } = require('./gofile_debrid');
+const { lancerExtraction, lancerExtractionsMultiples, initWebSocket } = require('./gofile_debrid');
 
 // Configuration de l'application
 const app = express();
@@ -344,6 +344,40 @@ app.post('/api/gofile/extract', async (req, res) => {
         console.error('Erreur lors du traitement de la requête Gofile :', err);
         res.status(500).json({ error: 'Erreur lors du traitement de la requête Gofile' });
     }
+});
+
+// Initialiser le WebSocket sur le port 3001
+initWebSocket(3001);
+
+// Route pour l'extraction multiple de Gofile
+app.post('/api/extract', async (req, res) => {
+  const { urls, parallel } = req.body;
+  
+  if (!urls || !Array.isArray(urls) || urls.length === 0) {
+    return res.status(400).json({ error: 'URLs invalides' });
+  }
+
+  try {
+    // Lancer l'extraction en arrière-plan
+    const options = {
+      parallel: parallel || false,
+      maxConcurrent: 3
+    };
+
+    // Ne pas attendre la fin de l'extraction pour répondre
+    lancerExtractionsMultiples(urls, options)
+      .catch(error => console.error('Erreur lors de l\'extraction multiple:', error));
+
+    // Répondre immédiatement avec les IDs des extractions
+    const extractionIds = urls.map(() => uuidv4());
+    res.json({ 
+      message: 'Extractions démarrées',
+      extractionIds
+    });
+  } catch (error) {
+    console.error('Erreur:', error);
+    res.status(500).json({ error: 'Erreur lors du démarrage des extractions' });
+  }
 });
 
 // Démarrer le serveur

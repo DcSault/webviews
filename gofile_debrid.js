@@ -253,7 +253,84 @@ async function moveAndSortDownloads(downloadFolder) {
   return downloadedFiles;
 }
 
-// Exporter la fonction
+/**
+ * Lance l'extraction de plusieurs liens Gofile en parallèle ou en séquentiel
+ * @param {string[]} urls - Tableau des URLs Gofile à traiter
+ * @param {Object} options - Options de configuration
+ * @param {boolean} options.parallel - Si true, lance les téléchargements en parallèle, sinon en séquentiel
+ * @param {number} options.maxConcurrent - Nombre maximum de téléchargements simultanés (par défaut: 3)
+ * @returns {Promise<Array>} - Tableau des résultats de chaque extraction
+ */
+async function lancerExtractionsMultiples(urls, options = {}) {
+  const {
+    parallel = false,
+    maxConcurrent = 3
+  } = options;
+
+  console.log(`Démarrage de l'extraction multiple pour ${urls.length} liens`);
+  console.log(`Mode: ${parallel ? 'parallèle' : 'séquentiel'}`);
+
+  const resultats = [];
+  const erreurs = [];
+
+  if (parallel) {
+    // Traitement par lots pour limiter le nombre de téléchargements simultanés
+    for (let i = 0; i < urls.length; i += maxConcurrent) {
+      const lot = urls.slice(i, i + maxConcurrent);
+      console.log(`Traitement du lot ${i / maxConcurrent + 1} (${lot.length} liens)`);
+      
+      const promesses = lot.map(async (url) => {
+        try {
+          const resultat = await lancerExtraction(url);
+          resultats.push({ url, success: true, files: resultat });
+          console.log(`✓ Extraction réussie pour ${url}`);
+        } catch (error) {
+          erreurs.push({ url, error: error.message });
+          console.error(`✗ Échec de l'extraction pour ${url}:`, error.message);
+        }
+      });
+
+      await Promise.all(promesses);
+    }
+  } else {
+    // Traitement séquentiel
+    for (const url of urls) {
+      console.log(`Traitement de ${url}`);
+      try {
+        const resultat = await lancerExtraction(url);
+        resultats.push({ url, success: true, files: resultat });
+        console.log(`✓ Extraction réussie pour ${url}`);
+      } catch (error) {
+        erreurs.push({ url, error: error.message });
+        console.error(`✗ Échec de l'extraction pour ${url}:`, error.message);
+      }
+    }
+  }
+
+  // Résumé final
+  console.log('\nRésumé des extractions:');
+  console.log(`Total: ${urls.length}`);
+  console.log(`Réussies: ${resultats.length}`);
+  console.log(`Échecs: ${erreurs.length}`);
+
+  if (erreurs.length > 0) {
+    console.log('\nDétail des erreurs:');
+    erreurs.forEach(({ url, error }) => {
+      console.log(`- ${url}: ${error}`);
+    });
+  }
+
+  return {
+    resultats,
+    erreurs,
+    total: urls.length,
+    reussis: resultats.length,
+    echecs: erreurs.length
+  };
+}
+
+// Exporter les fonctions
 module.exports = {
-  lancerExtraction
+  lancerExtraction,
+  lancerExtractionsMultiples
 };
