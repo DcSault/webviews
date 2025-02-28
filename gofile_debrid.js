@@ -1,4 +1,4 @@
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
 const fs = require('fs');
 const fsPromises = fs.promises;
 const path = require('path');
@@ -47,12 +47,70 @@ async function lancerExtraction(urlGofile, downloadFolder) {
   await fsPromises.mkdir(tempDownloadFolder, { recursive: true });
 
   try {
-    // Lancement de Puppeteer et configuration du dossier de téléchargement via CDP
-    const browser = await puppeteer.launch({
+    // Configuration de Puppeteer pour utiliser Chrome portable
+    const options = {
       headless: "new",
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--window-size=1280,800'],
-      defaultViewport: { width: 1280, height: 800 }
-    });
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--window-size=1280,800'
+      ],
+      defaultViewport: { width: 1280, height: 800 },
+      // Utiliser le chemin vers Chrome portable ou le Chrome par défaut du système
+      executablePath: process.platform === 'win32' 
+        ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'  // Windows
+        : process.platform === 'darwin'
+          ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' // MacOS
+          : '/usr/bin/google-chrome', // Linux
+      ignoreDefaultArgs: ['--disable-extensions']
+    };
+
+    // Tentative de lancement du navigateur
+    console.log("Tentative de lancement du navigateur...");
+    let browser;
+    try {
+      browser = await puppeteer.launch(options);
+    } catch (error) {
+      console.error('Erreur lors du premier essai:', error);
+      
+      // Si la première tentative échoue, essayer avec des chemins alternatifs
+      const alternativePaths = {
+        win32: [
+          'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+          process.env.LOCALAPPDATA + '\\Google\\Chrome\\Application\\chrome.exe',
+          process.env.PROGRAMFILES + '\\Google\\Chrome\\Application\\chrome.exe',
+          process.env['PROGRAMFILES(X86)'] + '\\Google\\Chrome\\Application\\chrome.exe'
+        ],
+        darwin: [
+          '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+          '~/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+        ],
+        linux: [
+          '/usr/bin/google-chrome-stable',
+          '/usr/bin/chromium-browser',
+          '/usr/bin/chromium',
+          '/snap/bin/chromium'
+        ]
+      };
+
+      const paths = alternativePaths[process.platform] || [];
+      for (const path of paths) {
+        try {
+          options.executablePath = path;
+          browser = await puppeteer.launch(options);
+          console.log('Navigateur lancé avec succès en utilisant:', path);
+          break;
+        } catch (e) {
+          console.log('Échec avec le chemin:', path);
+        }
+      }
+
+      if (!browser) {
+        throw new Error('Impossible de trouver Chrome. Veuillez installer Google Chrome et réessayer.');
+      }
+    }
 
     const page = await browser.newPage();
 
