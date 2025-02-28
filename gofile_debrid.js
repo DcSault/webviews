@@ -3,6 +3,69 @@ const fs = require('fs');
 const fsPromises = fs.promises;
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
+const WebSocket = require('ws');
+
+let wss;
+let progressCallbacks = new Map();
+
+/**
+ * Initialise le serveur WebSocket pour la communication en temps réel
+ * @param {number} port - Port pour le serveur WebSocket
+ */
+function initWebSocket(port = 3001) {
+  wss = new WebSocket.Server({ port });
+  
+  wss.on('connection', (ws) => {
+    console.log('Nouvelle connexion WebSocket établie');
+    
+    ws.on('message', (message) => {
+      try {
+        const data = JSON.parse(message);
+        if (data.type === 'subscribe' && data.extractionId) {
+          // Enregistrer le callback pour cet ID d'extraction
+          if (!progressCallbacks.has(data.extractionId)) {
+            progressCallbacks.set(data.extractionId, new Set());
+          }
+          progressCallbacks.get(data.extractionId).add(ws);
+        }
+      } catch (error) {
+        console.error('Erreur de parsing WebSocket:', error);
+      }
+    });
+    
+    ws.on('close', () => {
+      // Nettoyer les callbacks lors de la déconnexion
+      for (const [id, callbacks] of progressCallbacks.entries()) {
+        callbacks.delete(ws);
+        if (callbacks.size === 0) {
+          progressCallbacks.delete(id);
+        }
+      }
+    });
+  });
+
+  console.log(`Serveur WebSocket démarré sur le port ${port}`);
+  return wss;
+}
+
+/**
+ * Envoie une mise à jour de progression aux clients WebSocket
+ */
+function envoyerProgression(extractionId, data) {
+  if (!progressCallbacks.has(extractionId)) return;
+  
+  const message = JSON.stringify({
+    type: 'progress',
+    extractionId,
+    ...data
+  });
+  
+  progressCallbacks.get(extractionId).forEach(ws => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(message);
+    }
+  });
+}
 
 /**
  * Attendre un délai défini (en ms)
@@ -332,5 +395,7 @@ async function lancerExtractionsMultiples(urls, options = {}) {
 // Exporter les fonctions
 module.exports = {
   lancerExtraction,
-  lancerExtractionsMultiples
+  lancerExtractionsMultiples,
+  initWebSocket,
+  envoyerProgression
 };

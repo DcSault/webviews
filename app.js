@@ -346,9 +346,6 @@ app.post('/api/gofile/extract', async (req, res) => {
     }
 });
 
-// Initialiser le WebSocket sur le port 3001
-initWebSocket(3001);
-
 // Route pour l'extraction multiple de Gofile
 app.post('/api/extract', async (req, res) => {
   const { urls, parallel } = req.body;
@@ -380,7 +377,15 @@ app.post('/api/extract', async (req, res) => {
   }
 });
 
-// Démarrer le serveur
-app.listen(port, () => {
-    console.log(`Serveur démarré sur http://localhost:${port}`);
+// Démarrer le serveur HTTP
+const server = app.listen(port, () => {
+    console.log(`Serveur HTTP démarré sur http://localhost:${port}`);
+    
+    // Initialiser le WebSocket une fois que le serveur HTTP est démarré
+    try {
+        initWebSocket(3001);
+        console.log('Serveur WebSocket démarré sur le port 3001');
+    } catch (error) {
+        console.error('Erreur lors du démarrage du WebSocket:', error);
+    }
 });
