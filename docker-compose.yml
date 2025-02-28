@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  app:
+    image: node:18-alpine
+    container_name: webviews-app
+    command: |
+      sh -c '
+        # Installation des dépendances système
+        apk add --no-cache git chromium chromium-chromedriver nss freetype freetype-dev harfbuzz ca-certificates ttf-freefont &&
+        mkdir -p /tmp/app &&
+        git clone https://github.com/DcSault/webviews.git /tmp/app &&
+        # Copier tout SAUF le dossier data
+        cp -R /tmp/app/public /app/ &&
+        cp -R /tmp/app/*.js /app/ &&
+        cp -R /tmp/app/package.json /app/ &&
+        rm -rf /tmp/app &&
+        cd /app &&
+        npm install &&
+        # Créer les dossiers nécessaires avec les bonnes permissions
+        mkdir -p /app/data/media/images /app/data/media/videos /app/temp_downloads &&
+        chmod -R 777 /app/data /app/temp_downloads &&
+        node app.js
+      '
+    ports:
+      - "6969:3000"
+    environment:
+      - NODE_ENV=production
+      - UPLOAD_DIR=/app/data/media
+      - CHROME_BIN=/usr/bin/chromium-browser  # Chemin vers Chromium
+      # Variables d'environnement pour Puppeteer
+      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+    volumes:
+      - data_volume:/app/data  # Volume persistant pour le dossier data
+      - temp_volume:/app/temp_downloads  # Volume pour les téléchargements temporaires
+    networks:
+      - app-network
+    restart: unless-stopped
+    # Configuration pour Chromium en environnement conteneurisé
+    cap_add:
+      - SYS_ADMIN  # Nécessaire pour Chromium en mode sandbox
+    security_opt:
+      - seccomp=unconfined  # Permet à Chromium de fonctionner dans le conteneur
+
+volumes:
+  data_volume:
+    name: webviews-data-volume
+  temp_volume:
+    name: webviews-temp-volume
+
+networks:
+  app-network:
+    name: webviews-network
+    driver: bridge 
