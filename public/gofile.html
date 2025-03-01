@@ -375,26 +375,86 @@
       padding: 15px;
       background-color: var(--bg-color);
       border-radius: var(--border-radius);
+      max-height: 400px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .download-history h3 {
+      margin: 0 0 15px 0;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border-color);
+      position: sticky;
+      top: 0;
+      background-color: var(--bg-color);
+      z-index: 1;
+    }
+
+    .history-items {
+      overflow-y: auto;
+      flex-grow: 1;
+      padding-right: 10px;
+      /* Style de la barre de défilement pour Firefox */
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-color) transparent;
+    }
+
+    /* Style de la barre de défilement pour Chrome/Safari/Edge */
+    .history-items::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .history-items::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .history-items::-webkit-scrollbar-thumb {
+      background-color: var(--border-color);
+      border-radius: 3px;
     }
 
     .history-item {
       display: flex;
       align-items: center;
-      padding: 10px;
+      padding: 12px;
       margin-bottom: 8px;
       background-color: white;
       border-radius: var(--border-radius);
       border: 1px solid var(--border-color);
+      transition: transform 0.2s ease;
+    }
+
+    .history-item:hover {
+      transform: translateX(5px);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 
     .history-item .url-info {
       flex: 1;
     }
 
+    .history-item .url-text {
+      font-weight: 500;
+      margin-bottom: 4px;
+      color: var(--text-color);
+    }
+
     .history-item .stats {
       font-size: 0.85em;
       color: var(--text-secondary);
-      margin-top: 5px;
+      display: flex;
+      gap: 15px;
+    }
+
+    .history-item .stat {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .history-item .stat-icon {
+      opacity: 0.7;
     }
 
     .speed-info {
@@ -755,11 +815,20 @@
       div.className = 'history-item';
       div.innerHTML = `
         <div class="url-info">
-          <div>${url}</div>
+          <div class="url-text">${url}</div>
           <div class="stats">
-            Vitesse: ${formatSpeed(data.speed)} | 
-            Taille: ${formatSize(data.size)} | 
-            Date: ${new Date().toLocaleString()}
+            <span class="stat">
+              <span class="stat-icon">⚡</span>
+              ${formatSpeed(data.speed)}
+            </span>
+            <span class="stat">
+              <span class="stat-icon">📦</span>
+              ${formatSize(data.size)}
+            </span>
+            <span class="stat">
+              <span class="stat-icon">🕒</span>
+              ${new Date().toLocaleString()}
+            </span>
           </div>
         </div>
       `;
@@ -879,7 +948,9 @@
         }
         updateUrlProgress(index, 25);
 
-        const response = await fetch('/api/gofile/extract', {
+        // Première étape : extraction
+        console.log('Démarrage de l\'extraction pour', validatedUrl);
+        const extractResponse = await fetch('/api/gofile/extract', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -887,23 +958,42 @@
           body: JSON.stringify({ url: validatedUrl })
         });
 
-        if (!response.ok) {
-          throw new Error('Erreur lors de l\'extraction');
+        if (!extractResponse.ok) {
+          const error = await extractResponse.json();
+          throw new Error(error.details || 'Erreur lors de l\'extraction');
         }
 
-        const result = await response.json();
+        const extractResult = await extractResponse.json();
+        if (!extractResult.success || !extractResult.downloadUrl) {
+          throw new Error('Échec de l\'extraction : URL de téléchargement non trouvée');
+        }
+
         updateUrlProgress(index, 50);
 
+        // Deuxième étape : téléchargement
+        console.log('Démarrage du téléchargement pour', extractResult.downloadUrl);
         const downloadResponse = await fetch('/api/gofile/download', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ url: validatedUrl, fileInfo: result })
+          body: JSON.stringify({ 
+            url: validatedUrl, 
+            fileInfo: {
+              downloadUrl: extractResult.downloadUrl,
+              fileName: extractResult.fileName,
+              fileSize: extractResult.fileSize
+            }
+          })
         });
 
+        if (!downloadResponse.ok) {
+          const error = await downloadResponse.json();
+          throw new Error(error.details || 'Erreur lors du téléchargement');
+        }
+
         const reader = downloadResponse.body.getReader();
-        const contentLength = +downloadResponse.headers.get('Content-Length');
+        const contentLength = extractResult.fileSize || parseInt(downloadResponse.headers.get('Content-Length')) || 0;
         let receivedLength = 0;
 
         while(true) {
@@ -911,8 +1001,8 @@
           if (done) break;
           
           receivedLength += value.length;
-          const progress = (receivedLength / contentLength) * 100;
-          updateUrlProgress(index, progress, receivedLength, contentLength);
+          const progress = contentLength > 0 ? (receivedLength / contentLength) * 100 : 0;
+          updateUrlProgress(index, Math.min(50 + progress/2, 100), receivedLength, contentLength);
         }
 
         addToHistory(url, {
