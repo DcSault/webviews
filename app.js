@@ -233,10 +233,12 @@ app.get('/api/media', cacheMiddleware(300), async (req, res) => {
         const search = req.query.search?.toLowerCase() || '';
         
         let metadata = await getMetadata();
+        console.log('Métadonnées chargées:', metadata.length, 'entrées');
 
         // Appliquer les filtres
         if (filter !== 'all') {
             metadata = metadata.filter(item => item.type === filter);
+            console.log('Après filtre:', metadata.length, 'entrées');
         }
 
         // Appliquer la recherche
@@ -246,6 +248,7 @@ app.get('/api/media', cacheMiddleware(300), async (req, res) => {
                 (item.description && item.description.toLowerCase().includes(search)) ||
                 (item.sender && item.sender.toLowerCase().includes(search))
             );
+            console.log('Après recherche:', metadata.length, 'entrées');
         }
 
         // Trier par date de création (du plus récent au plus ancien)
@@ -259,21 +262,24 @@ app.get('/api/media', cacheMiddleware(300), async (req, res) => {
 
         // Vérifier l'existence des fichiers
         const validatedData = await Promise.all(paginatedData.map(async (item) => {
-            const filePath = path.join(mediaDir, `${item.type}s`, item.filename);
+            const filePath = path.join('/app/data/media', `${item.type}s`, item.filename);
+            console.log('Vérification du fichier:', filePath);
             try {
-                await fs.access(filePath);
+                await fs.promises.access(filePath, fs.constants.F_OK);
+                console.log('✓ Fichier trouvé:', filePath);
                 return {
                     ...item,
                     filePath: `/data/media/${item.type}s/${item.filename}`
                 };
             } catch (err) {
-                console.warn(`Fichier non trouvé: ${filePath}`);
+                console.warn(`✗ Fichier non trouvé: ${filePath}`);
                 return null;
             }
         }));
 
         // Filtrer les fichiers non existants
         const finalData = validatedData.filter(item => item !== null);
+        console.log('Nombre de fichiers valides:', finalData.length);
         
         res.json({
             data: finalData,
