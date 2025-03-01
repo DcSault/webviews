@@ -229,16 +229,55 @@ app.get('/api/media', cacheMiddleware(300), async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 20;
-        const skip = (page - 1) * limit;
+        const filter = req.query.filter || 'all';
+        const search = req.query.search?.toLowerCase() || '';
         
-        const metadata = await getMetadata();
+        let metadata = await getMetadata();
+
+        // Appliquer les filtres
+        if (filter !== 'all') {
+            metadata = metadata.filter(item => item.type === filter);
+        }
+
+        // Appliquer la recherche
+        if (search) {
+            metadata = metadata.filter(item => 
+                item.originalName.toLowerCase().includes(search) ||
+                (item.description && item.description.toLowerCase().includes(search)) ||
+                (item.sender && item.sender.toLowerCase().includes(search))
+            );
+        }
+
+        // Trier par date de création (du plus récent au plus ancien)
+        metadata.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+        // Calculer la pagination
+        const totalItems = metadata.length;
+        const totalPages = Math.ceil(totalItems / limit);
+        const skip = (page - 1) * limit;
         const paginatedData = metadata.slice(skip, skip + limit);
+
+        // Vérifier l'existence des fichiers
+        const validatedData = await Promise.all(paginatedData.map(async (item) => {
+            const filePath = path.join(__dirname, 'data', 'media', `${item.type}s`, item.filename);
+            try {
+                await fs.access(filePath);
+                return item;
+            } catch (err) {
+                console.warn(`Fichier non trouvé: ${filePath}`);
+                return null;
+            }
+        }));
+
+        // Filtrer les fichiers non existants
+        const finalData = validatedData.filter(item => item !== null);
         
         res.json({
-            data: paginatedData,
-            total: metadata.length,
+            data: finalData,
+            total: totalItems,
             page,
-            totalPages: Math.ceil(metadata.length / limit)
+            totalPages,
+            hasMore: page < totalPages
         });
     } catch (error) {
         console.error('Erreur lors de la récupération des médias:', error);
