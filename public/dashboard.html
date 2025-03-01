@@ -779,8 +779,26 @@
         });
 
         if (response.ok) {
-          // Recharger les doublons après l'action
-          document.getElementById('scanDuplicates').click();
+          // Supprimer le groupe de l'interface
+          const groupElement = document.getElementById(`group-${groupId}`);
+          if (groupElement) {
+            groupElement.remove();
+          }
+          
+          // Mettre à jour le résumé
+          const totalGroups = document.getElementById('totalGroups');
+          const totalDuplicates = document.getElementById('totalDuplicates');
+          const potentialSpaceSaving = document.getElementById('potentialSpaceSaving');
+          
+          totalGroups.textContent = parseInt(totalGroups.textContent) - 1;
+          // Soustraire le nombre de fichiers dans le groupe - 1 (car on en garde un)
+          const filesInGroup = groupElement ? groupElement.querySelectorAll('.duplicate-file').length - 1 : 0;
+          totalDuplicates.textContent = parseInt(totalDuplicates.textContent) - filesInGroup;
+          
+          // Si plus aucun groupe, cacher le résumé
+          if (parseInt(totalGroups.textContent) === 0) {
+            document.getElementById('duplicateSummary').style.display = 'none';
+          }
         } else {
           throw new Error('Erreur lors de la conservation du fichier');
         }
@@ -802,8 +820,32 @@
         });
 
         if (response.ok) {
-          // Recharger les doublons après l'action
-          document.getElementById('scanDuplicates').click();
+          // Trouver l'élément du fichier et le supprimer
+          const groupElement = document.getElementById(`group-${groupId}`);
+          if (groupElement) {
+            const fileElements = groupElement.querySelectorAll('.duplicate-file');
+            fileElements.forEach(fileEl => {
+              if (fileEl.querySelector(`button[onclick*="${fileId}"]`)) {
+                fileEl.remove();
+                
+                // Mettre à jour le résumé
+                const totalDuplicates = document.getElementById('totalDuplicates');
+                totalDuplicates.textContent = parseInt(totalDuplicates.textContent) - 1;
+                
+                // Si c'était le dernier fichier du groupe (sauf un), supprimer le groupe
+                if (groupElement.querySelectorAll('.duplicate-file').length <= 1) {
+                  groupElement.remove();
+                  const totalGroups = document.getElementById('totalGroups');
+                  totalGroups.textContent = parseInt(totalGroups.textContent) - 1;
+                  
+                  // Si plus aucun groupe, cacher le résumé
+                  if (parseInt(totalGroups.textContent) === 0) {
+                    document.getElementById('duplicateSummary').style.display = 'none';
+                  }
+                }
+              }
+            });
+          }
         } else {
           throw new Error('Erreur lors de la suppression du fichier');
         }
