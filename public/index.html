@@ -172,50 +172,70 @@
     }
 
     .media-item {
-      width: 100%;
-      height: 300px;
-      object-fit: contain;
-      background-color: #f8f9fa;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      transition: transform 0.2s;
+      position: relative;
     }
 
-    .media-item.video {
+    .media-item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+
+    .media-content {
+      position: relative;
       width: 100%;
-      height: 300px;
-      object-fit: contain;
+      padding-top: 56.25%; /* Ratio 16:9 */
       background-color: #000;
     }
 
-    .media-error {
+    .media-content video,
+    .media-content img,
+    .media-content audio {
+      position: absolute;
+      top: 0;
+      left: 0;
       width: 100%;
-      height: 300px;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      background-color: #fee;
-      color: #d33;
-      text-align: center;
-      padding: 20px;
-    }
-
-    .media-error p {
-      margin: 5px 0;
-    }
-
-    .media-error p:first-child {
-      font-weight: bold;
+      height: 100%;
+      object-fit: contain;
     }
 
     .media-info {
-      padding: 10px;
-      background: rgba(255, 255, 255, 0.95);
-      border-top: 1px solid #eee;
+      padding: 15px;
+      background: white;
     }
 
-    .media-info p {
-      margin: 5px 0;
-      font-size: 0.9rem;
-      color: #666;
+    .media-title {
+      font-size: 1rem;
+      font-weight: 500;
+      margin-bottom: 8px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .media-buttons {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .delete-btn {
+      padding: 6px 12px;
+      background-color: #dc3545;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .delete-btn:hover {
+      background-color: #c82333;
     }
 
     /* Lazy loading animation */
@@ -334,22 +354,36 @@
       
       let mediaContent = '';
       if (item.type === 'video') {
-        mediaContent = `<video src="${item.filePath}" controls></video>`;
+        mediaContent = `
+          <div class="media-content">
+            <video src="${item.filePath}" controls></video>
+          </div>`;
       } else if (item.type === 'image') {
-        mediaContent = `<img src="${item.filePath}" alt="${item.originalName}">`;
+        mediaContent = `
+          <div class="media-content">
+            <img src="${item.filePath}" alt="${item.originalName}">
+          </div>`;
       } else if (item.type === 'audio') {
-        mediaContent = `<audio src="${item.filePath}" controls></audio>`;
+        mediaContent = `
+          <div class="media-content">
+            <audio src="${item.filePath}" controls></audio>
+          </div>`;
       } else {
-        mediaContent = `<div class="file-icon">📄</div>`;
+        mediaContent = `
+          <div class="media-content">
+            <div class="file-icon">📄</div>
+          </div>`;
       }
 
       div.innerHTML = `
         ${mediaContent}
-        <div class="media-content">
+        <div class="media-info">
           <h3 class="media-title">${item.originalName}</h3>
           <p>${item.description || ''}</p>
           <small>Ajouté par: ${item.sender || 'Anonyme'}</small>
-          <button onclick="deleteMedia('${item.id}')" class="btn btn-secondary">Supprimer</button>
+          <div class="media-buttons">
+            <button onclick="deleteMedia('${item.id}')" class="delete-btn">Supprimer</button>
+          </div>
         </div>
       `;
 
