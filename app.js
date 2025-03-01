@@ -10,6 +10,7 @@ require('dotenv').config();
 const { lancerExtraction } = require('./gofile_debrid');
 const compression = require('compression');
 const cache = require('memory-cache');
+const crypto = require('crypto');
 
 // Configuration de l'application
 const app = express();
@@ -537,6 +538,185 @@ function formatSize(bytes) {
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Fonction pour calculer le hash d'un fichier
+async function calculateFileHash(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const stream = fs.createReadStream(filePath);
+    
+    stream.on('error', err => reject(err));
+    stream.on('data', chunk => hash.update(chunk));
+    stream.on('end', () => resolve(hash.digest('hex')));
+  });
+}
+
+// Route pour scanner les doublons
+app.get('/api/duplicates/scan', async (req, res) => {
+  try {
+    const mediaDir = path.join(__dirname, 'data', 'media');
+    const duplicateGroups = [];
+    const fileHashes = new Map();
+
+    // Parcourir tous les sous-dossiers de média
+    for (const type of ['images', 'videos', 'audio']) {
+      const typeDir = path.join(mediaDir, type);
+      if (!fs.existsSync(typeDir)) continue;
+
+      const files = await fs.promises.readdir(typeDir);
+      
+      for (const filename of files) {
+        const filePath = path.join(typeDir, filename);
+        const stats = await fs.promises.stat(filePath);
+        
+        if (stats.isFile()) {
+          const hash = await calculateFileHash(filePath);
+          const fileInfo = {
+            id: path.parse(filename).name, // Utiliser le nom du fichier sans extension comme ID
+            filename,
+            type,
+            size: stats.size,
+            timestamp: stats.mtime,
+            path: filePath
+          };
+
+          if (fileHashes.has(hash)) {
+            const groupId = fileHashes.get(hash).groupId;
+            const group = duplicateGroups.find(g => g.id === groupId);
+            if (group) {
+              group.files.push(fileInfo);
+            }
+          } else {
+            const groupId = crypto.randomUUID();
+            fileHashes.set(hash, { groupId, fileInfo });
+            duplicateGroups.push({
+              id: groupId,
+              files: [fileInfo]
+            });
+          }
+        }
+      }
+    }
+
+    // Ne renvoyer que les groupes qui ont des doublons
+    const groupsWithDuplicates = duplicateGroups.filter(group => group.files.length > 1);
+    
+    res.json({ groups: groupsWithDuplicates });
+  } catch (error) {
+    console.error('Erreur lors du scan des doublons:', error);
+    res.status(500).json({ error: 'Erreur lors du scan des doublons' });
+  }
+});
+
+// Route pour supprimer un fichier spécifique
+app.post('/api/duplicates/delete', async (req, res) => {
+  try {
+    const { fileId, groupId } = req.body;
+    if (!fileId || !groupId) {
+      return res.status(400).json({ error: 'fileId et groupId sont requis' });
+    }
+
+    // Rechercher le fichier dans les dossiers média
+    const mediaDir = path.join(__dirname, 'data', 'media');
+    let filePath = null;
+
+    for (const type of ['images', 'videos', 'audio']) {
+      const typeDir = path.join(mediaDir, type);
+      if (!fs.existsSync(typeDir)) continue;
+
+      const files = await fs.promises.readdir(typeDir);
+      const matchingFile = files.find(f => path.parse(f).name === fileId);
+      
+      if (matchingFile) {
+        filePath = path.join(typeDir, matchingFile);
+        break;
+      }
+    }
+
+    if (!filePath) {
+      return res.status(404).json({ error: 'Fichier non trouvé' });
+    }
+
+    // Supprimer le fichier
+    await fs.promises.unlink(filePath);
+    
+    // Mettre à jour les métadonnées si nécessaire
+    // TODO: Supprimer les métadonnées associées au fichier
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Erreur lors de la suppression du fichier:', error);
+    res.status(500).json({ error: 'Erreur lors de la suppression du fichier' });
+  }
+});
+
+// Route pour garder un fichier et supprimer les autres du même groupe
+app.post('/api/duplicates/keep', async (req, res) => {
+  try {
+    const { fileId, groupId } = req.body;
+    if (!fileId || !groupId) {
+      return res.status(400).json({ error: 'fileId et groupId sont requis' });
+    }
+
+    // D'abord, scanner pour trouver tous les fichiers du groupe
+    const mediaDir = path.join(__dirname, 'data', 'media');
+    const groupFiles = [];
+
+    for (const type of ['images', 'videos', 'audio']) {
+      const typeDir = path.join(mediaDir, type);
+      if (!fs.existsSync(typeDir)) continue;
+
+      const files = await fs.promises.readdir(typeDir);
+      for (const filename of files) {
+        const currentFileId = path.parse(filename).name;
+        if (currentFileId !== fileId) {
+          const filePath = path.join(typeDir, filename);
+          const fileHash = await calculateFileHash(filePath);
+          groupFiles.push({ id: currentFileId, path: filePath, hash: fileHash });
+        }
+      }
+    }
+
+    // Trouver le fichier à conserver pour obtenir son hash
+    const keepFilePath = await findFilePath(fileId);
+    if (!keepFilePath) {
+      return res.status(404).json({ error: 'Fichier à conserver non trouvé' });
+    }
+    const keepFileHash = await calculateFileHash(keepFilePath);
+
+    // Supprimer tous les autres fichiers du groupe qui ont le même hash
+    for (const file of groupFiles) {
+      if (file.hash === keepFileHash) {
+        await fs.promises.unlink(file.path);
+        // TODO: Supprimer les métadonnées associées au fichier
+      }
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Erreur lors de la conservation du fichier:', error);
+    res.status(500).json({ error: 'Erreur lors de la conservation du fichier' });
+  }
+});
+
+// Fonction utilitaire pour trouver le chemin d'un fichier par son ID
+async function findFilePath(fileId) {
+  const mediaDir = path.join(__dirname, 'data', 'media');
+  
+  for (const type of ['images', 'videos', 'audio']) {
+    const typeDir = path.join(mediaDir, type);
+    if (!fs.existsSync(typeDir)) continue;
+
+    const files = await fs.promises.readdir(typeDir);
+    const matchingFile = files.find(f => path.parse(f).name === fileId);
+    
+    if (matchingFile) {
+      return path.join(typeDir, matchingFile);
+    }
+  }
+  
+  return null;
 }
 
 // Démarrer le serveur

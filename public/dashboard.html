@@ -141,6 +141,76 @@
         grid-template-columns: 1fr;
       }
     }
+
+    .duplicates-container {
+      max-height: 500px;
+      overflow-y: auto;
+    }
+
+    .duplicate-group {
+      background: var(--card-bg);
+      border-radius: var(--border-radius);
+      padding: 15px;
+      margin-bottom: 15px;
+    }
+
+    .duplicate-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .duplicate-files {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .duplicate-file {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px;
+      background: var(--bg-color);
+      border-radius: var(--border-radius);
+    }
+
+    .duplicate-file-info {
+      flex: 1;
+    }
+
+    .duplicate-file-name {
+      font-weight: 500;
+    }
+
+    .duplicate-file-meta {
+      font-size: 0.9em;
+      color: var(--text-color-light);
+    }
+
+    .duplicate-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn-keep {
+      background-color: #28a745;
+      color: white;
+      padding: 5px 10px;
+      border-radius: var(--border-radius);
+      border: none;
+      cursor: pointer;
+    }
+
+    .btn-delete {
+      background-color: #dc3545;
+      color: white;
+      padding: 5px 10px;
+      border-radius: var(--border-radius);
+      border: none;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -226,6 +296,25 @@
         <ul class="activity-list" id="activityList">
           <!-- La liste sera remplie dynamiquement -->
         </ul>
+      </div>
+    </div>
+
+    <div class="dashboard-grid">
+      <!-- Autres sections du dashboard -->
+      
+      <div class="dashboard-card">
+        <h3>Gestion des Doublons</h3>
+        <div class="duplicate-controls">
+          <button id="scanDuplicates" class="btn btn-primary">
+            Rechercher les Doublons
+          </button>
+          <div class="duplicate-stats" style="margin-top: 10px;">
+            <span id="duplicateCount">0</span> doublons trouvés
+          </div>
+        </div>
+        <div id="duplicatesList" class="duplicates-container" style="margin-top: 20px;">
+          <!-- Les groupes de doublons seront ajoutés ici -->
+        </div>
       </div>
     </div>
   </div>
@@ -357,6 +446,150 @@
 
     // Rafraîchissement toutes les 5 minutes
     setInterval(loadStats, 5 * 60 * 1000);
+
+    // Fonction pour formater la taille des fichiers
+    function formatFileSize(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // Fonction pour formater la date
+    function formatDate(dateString) {
+      return new Date(dateString).toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    // Fonction pour créer un élément de fichier doublon
+    function createDuplicateFileElement(file) {
+      const div = document.createElement('div');
+      div.className = 'duplicate-file';
+      div.innerHTML = `
+        <div class="duplicate-file-info">
+          <div class="duplicate-file-name">${file.filename}</div>
+          <div class="duplicate-file-meta">
+            Taille: ${formatFileSize(file.size)} | 
+            Date: ${formatDate(file.timestamp)} | 
+            Type: ${file.type}
+          </div>
+        </div>
+        <div class="duplicate-actions">
+          <button class="btn-keep" onclick="keepFile('${file.id}', '${file.groupId}')">
+            Garder
+          </button>
+          <button class="btn-delete" onclick="deleteFile('${file.id}', '${file.groupId}')">
+            Supprimer
+          </button>
+        </div>
+      `;
+      return div;
+    }
+
+    // Fonction pour afficher les groupes de doublons
+    function displayDuplicateGroups(groups) {
+      const container = document.getElementById('duplicatesList');
+      container.innerHTML = '';
+      let totalDuplicates = 0;
+
+      groups.forEach((group, index) => {
+        if (group.files.length > 1) { // Ne montrer que les groupes avec des doublons
+          totalDuplicates += group.files.length - 1;
+          const groupDiv = document.createElement('div');
+          groupDiv.className = 'duplicate-group';
+          groupDiv.id = `group-${group.id}`;
+
+          const groupHeader = document.createElement('div');
+          groupHeader.className = 'duplicate-group-header';
+          groupHeader.innerHTML = `
+            <h4>Groupe de doublons #${index + 1}</h4>
+            <span>${group.files.length} fichiers - ${formatFileSize(group.files[0].size)}</span>
+          `;
+
+          const filesDiv = document.createElement('div');
+          filesDiv.className = 'duplicate-files';
+          
+          group.files.forEach(file => {
+            file.groupId = group.id;
+            filesDiv.appendChild(createDuplicateFileElement(file));
+          });
+
+          groupDiv.appendChild(groupHeader);
+          groupDiv.appendChild(filesDiv);
+          container.appendChild(groupDiv);
+        }
+      });
+
+      document.getElementById('duplicateCount').textContent = totalDuplicates;
+    }
+
+    // Gestionnaire de clic pour le bouton de scan
+    document.getElementById('scanDuplicates').addEventListener('click', async () => {
+      try {
+        const response = await fetch('/api/duplicates/scan');
+        const data = await response.json();
+        if (response.ok) {
+          displayDuplicateGroups(data.groups);
+        } else {
+          throw new Error(data.error || 'Erreur lors du scan des doublons');
+        }
+      } catch (error) {
+        console.error('Erreur:', error);
+        alert('Erreur lors du scan des doublons: ' + error.message);
+      }
+    });
+
+    // Fonction pour garder un fichier et supprimer les autres du même groupe
+    async function keepFile(fileId, groupId) {
+      try {
+        const response = await fetch('/api/duplicates/keep', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ fileId, groupId })
+        });
+
+        if (response.ok) {
+          // Recharger les doublons après l'action
+          document.getElementById('scanDuplicates').click();
+        } else {
+          throw new Error('Erreur lors de la conservation du fichier');
+        }
+      } catch (error) {
+        console.error('Erreur:', error);
+        alert('Erreur: ' + error.message);
+      }
+    }
+
+    // Fonction pour supprimer un fichier spécifique
+    async function deleteFile(fileId, groupId) {
+      try {
+        const response = await fetch('/api/duplicates/delete', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ fileId, groupId })
+        });
+
+        if (response.ok) {
+          // Recharger les doublons après l'action
+          document.getElementById('scanDuplicates').click();
+        } else {
+          throw new Error('Erreur lors de la suppression du fichier');
+        }
+      } catch (error) {
+        console.error('Erreur:', error);
+        alert('Erreur: ' + error.message);
+      }
+    }
   </script>
 </body>
 </html> 
