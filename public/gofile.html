@@ -113,14 +113,14 @@
     }
 
     .step-icon {
-      width: 16px;
-      height: 16px;
+      width: 24px;
+      height: 24px;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
       margin-right: 10px;
-      font-size: 10px;
+      font-size: 12px;
       color: white;
     }
 
@@ -195,13 +195,13 @@
 
     .url-item .status {
       margin-right: 10px;
-      width: 12px;
-      height: 12px;
+      width: 20px;
+      height: 20px;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 8px;
+      font-size: 12px;
       color: white;
     }
 
@@ -218,10 +218,6 @@
       background-color: #28a745;
     }
 
-    .url-item .status.completed.no-files {
-      background-color: #ffa500;
-    }
-
     .url-item .status.error {
       background-color: #dc3545;
     }
@@ -229,21 +225,6 @@
     .url-item .url-text {
       flex: 1;
       word-break: break-all;
-    }
-
-    .url-item .file-count {
-      margin-left: 10px;
-      font-size: 0.9em;
-      color: #666;
-    }
-
-    .file-count .count-item {
-      display: inline-block;
-      margin-right: 10px;
-    }
-
-    .file-count .count-item:last-child {
-      margin-right: 0;
     }
 
     textarea.form-control {
@@ -329,8 +310,6 @@
   <script>
     let urlQueue = [];
     let isProcessing = false;
-    let processedUrls = new Set(); // Pour stocker les URLs déjà traitées
-    let processedFiles = new Set(); // Pour stocker les fichiers déjà traités
 
     function updateStep(stepId, status, details = '') {
       const step = document.getElementById(stepId);
@@ -373,74 +352,23 @@
       div.innerHTML = `
         <div class="status pending">●</div>
         <div class="url-text">${url}</div>
-        <div class="file-count"></div>
       `;
       return div;
     }
 
-    function updateUrlStatus(index, status, message = '', fileStats = null) {
+    function updateUrlStatus(index, status, message = '') {
       const urlItem = document.getElementById(`url-${index}`);
       if (urlItem) {
         const statusDiv = urlItem.querySelector('.status');
-        const fileCountDiv = urlItem.querySelector('.file-count');
-        
-        // Mettre à jour le statut
-        if (status === 'completed' && fileStats) {
-          const totalFiles = Object.values(fileStats).reduce((a, b) => a + b, 0);
-          statusDiv.className = `status ${status}${totalFiles === 0 ? ' no-files' : ''}`;
-        } else {
-          statusDiv.className = `status ${status}`;
-        }
-
-        // Mettre à jour le message et les statistiques
-        if (status === 'completed' && fileStats) {
-          const fileCountText = [];
-          if (fileStats.videos > 0) {
-            fileCountText.push(`<span class="count-item">${fileStats.videos} Vidéo${fileStats.videos > 1 ? 's' : ''}</span>`);
-          }
-          if (fileStats.images > 0) {
-            fileCountText.push(`<span class="count-item">${fileStats.images} Image${fileStats.images > 1 ? 's' : ''}</span>`);
-          }
-          if (fileStats.audios > 0) {
-            fileCountText.push(`<span class="count-item">${fileStats.audios} Audio${fileStats.audios > 1 ? 's' : ''}</span>`);
-          }
-          
-          const totalFiles = Object.values(fileStats).reduce((a, b) => a + b, 0);
-          urlItem.querySelector('.url-text').textContent = url;
-          fileCountDiv.innerHTML = totalFiles > 0 ? `( ${fileCountText.join(' - ')} )` : '( Aucun fichier )';
-        } else if (message) {
-          urlItem.querySelector('.url-text').textContent = url;
-          fileCountDiv.textContent = message ? ` - ${message}` : '';
+        statusDiv.className = `status ${status}`;
+        if (message) {
+          urlItem.querySelector('.url-text').textContent = `${urlItem.querySelector('.url-text').textContent} - ${message}`;
         }
       }
     }
 
-    function resetProcessedSets() {
-      processedUrls.clear();
-      processedFiles.clear();
-    }
-
-    function isDuplicateUrl(url) {
-      return processedUrls.has(url);
-    }
-
-    function isDuplicateFile(filename) {
-      return processedFiles.has(filename);
-    }
-
-    function addProcessedUrl(url) {
-      processedUrls.add(url);
-    }
-
-    function addProcessedFiles(files) {
-      files.forEach(file => processedFiles.add(file.name));
-    }
-
     async function processNextUrl() {
       if (urlQueue.length === 0 || isProcessing) {
-        if (urlQueue.length === 0 && !isProcessing) {
-          showMessage('Extraction terminée : Toutes les URLs ont été traitées', 'success');
-        }
         return;
       }
 
@@ -454,19 +382,12 @@
         updateStep('stepValidation', 'in-progress', 'Vérification de l\'URL...');
         const validatedUrl = validateAndFixUrl(url);
         if (!validatedUrl.includes('gofile.io')) {
-          throw new Error('URL invalide');
+          throw new Error('URL GoFile invalide');
         }
-
-        // Vérifier si l'URL a déjà été traitée
-        if (isDuplicateUrl(validatedUrl)) {
-          throw new Error('URL déjà traitée');
-        }
-        addProcessedUrl(validatedUrl);
-
         updateStep('stepValidation', 'completed', 'URL validée');
 
         // Étape 2: Extraction
-        updateStep('stepExtraction', 'in-progress', 'Extraction des informations...');
+        updateStep('stepExtraction', 'in-progress', 'Extraction des informations du fichier...');
         
         const response = await fetch('/api/gofile/extract', {
           method: 'POST',
@@ -478,62 +399,40 @@
 
         const result = await response.json();
 
-        if (!response.ok || !result.files) {
-          throw new Error('Extraction impossible');
+        if (response.ok) {
+          updateStep('stepExtraction', 'completed', 'Informations extraites avec succès');
+          updateStep('stepDownload', 'in-progress', 'Téléchargement en cours...');
+
+          // Simulation de la progression
+          let progress = 0;
+          const progressInterval = setInterval(() => {
+            progress += 1;
+            document.getElementById('downloadProgressBar').style.width = `${progress}%`;
+            if (progress >= 100) {
+              clearInterval(progressInterval);
+              updateStep('stepDownload', 'completed', 'Téléchargement terminé');
+              updateStep('stepComplete', 'completed', 'Extraction terminée avec succès');
+              updateUrlStatus(index, 'completed', 'Terminé');
+              
+              // Passer à l'URL suivante
+              urlQueue.shift();
+              isProcessing = false;
+              processNextUrl();
+            }
+          }, 500);
+        } else {
+          throw new Error(result.error || 'Erreur lors de l\'extraction');
         }
-
-        // Vérifier les doublons de fichiers
-        const newFiles = result.files.filter(file => !isDuplicateFile(file.name));
-        if (newFiles.length === 0) {
-          throw new Error('Tous les fichiers ont déjà été traités');
-        }
-
-        // Ajouter les nouveaux fichiers à la liste des fichiers traités
-        addProcessedFiles(newFiles);
-
-        updateStep('stepExtraction', 'completed', 'Informations extraites');
-        
-        // Calculer les statistiques des fichiers
-        const fileStats = {
-          videos: newFiles.filter(f => f.type === 'video').length,
-          images: newFiles.filter(f => f.type === 'image').length,
-          audios: newFiles.filter(f => f.type === 'audio').length
-        };
-        
-        const totalFiles = Object.values(fileStats).reduce((a, b) => a + b, 0);
-        
-        if (totalFiles === 0) {
-          throw new Error('Aucun nouveau fichier trouvé');
-        }
-        
-        // Mettre à jour l'étape de téléchargement
-        updateStep('stepDownload', 'completed', `${totalFiles} nouveau(x) fichier(s)`);
-        
-        // Mettre à jour l'étape de finalisation
-        updateStep('stepComplete', 'completed', `${totalFiles} fichier(s) traité(s)`);
-        
-        // Mettre à jour le statut de l'URL avec les détails
-        updateUrlStatus(index, 'completed', '', fileStats);
-        
-        // Mettre la barre de progression à 100%
-        document.getElementById('downloadProgressBar').style.width = '100%';
-
-        // Ajouter un message de fin pour cette URL
-        showMessage(`Extraction terminée pour : ${validatedUrl} (${totalFiles} nouveau(x) fichier(s))`, 'success');
-        
       } catch (error) {
         const currentStep = document.querySelector('.step.in-progress');
         if (currentStep) {
           updateStep(currentStep.id, 'error', error.message);
         }
         updateUrlStatus(index, 'error', error.message);
-      } finally {
-        // Passer à l'URL suivante
+        
+        // Passer à l'URL suivante même en cas d'erreur
         urlQueue.shift();
         isProcessing = false;
-        
-        // Attendre 10 secondes avant de passer à l'URL suivante
-        await new Promise(resolve => setTimeout(resolve, 10000));
         processNextUrl();
       }
     }
@@ -542,54 +441,26 @@
       e.preventDefault();
       
       const urlsText = document.getElementById('gofileUrls').value;
-      const urls = urlsText.split('\n')
-        .map(url => url.trim())
-        .filter(url => url && url.length > 0);
+      const urls = urlsText.split('\n').filter(url => url.trim());
       
       if (urls.length === 0) {
         showMessage('Veuillez entrer au moins une URL', 'error');
         return;
       }
 
-      // Vérifier les doublons dans les URLs saisies
-      const uniqueUrls = [...new Set(urls.map(url => validateAndFixUrl(url)))];
-      if (uniqueUrls.length !== urls.length) {
-        showMessage(`${urls.length - uniqueUrls.length} URL(s) en double ont été supprimée(s)`, 'info');
-      }
-
-      // Réinitialiser la liste des URLs et les ensembles de traitement
+      // Réinitialiser la liste des URLs
       const urlItems = document.getElementById('urlItems');
       urlItems.innerHTML = '';
       urlQueue = [];
-      resetProcessedSets();
 
       // Créer la liste des URLs à traiter
-      uniqueUrls.forEach((url, index) => {
+      urls.forEach((url, index) => {
         urlItems.appendChild(createUrlItem(url, index));
         urlQueue.push({ url, index });
       });
 
-      // Désactiver le formulaire pendant le traitement
-      const form = document.getElementById('gofileForm');
-      const submitButton = form.querySelector('button[type="submit"]');
-      const textarea = document.getElementById('gofileUrls');
-      
-      submitButton.disabled = true;
-      textarea.disabled = true;
-      submitButton.textContent = 'Extraction en cours...';
-
-      // Démarrer le traitement de la première URL
+      // Démarrer le traitement
       processNextUrl();
-
-      // Surveiller la fin du traitement
-      const checkCompletion = setInterval(() => {
-        if (urlQueue.length === 0 && !isProcessing) {
-          submitButton.disabled = false;
-          textarea.disabled = false;
-          submitButton.textContent = 'Extraire';
-          clearInterval(checkCompletion);
-        }
-      }, 1000);
     });
 
     function showMessage(message, type = 'success') {
@@ -598,8 +469,7 @@
       statusDiv.textContent = message;
       statusDiv.style.display = 'block';
       
-      // Ne pas faire disparaître les messages de succès d'extraction
-      if (type !== 'success' && !message.includes('Extraction terminée')) {
+      if (type !== 'info') {
         setTimeout(() => {
           statusDiv.style.display = 'none';
         }, 5000);
