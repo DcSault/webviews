@@ -113,14 +113,14 @@
     }
 
     .step-icon {
-      width: 24px;
-      height: 24px;
+      width: 16px;
+      height: 16px;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
       margin-right: 10px;
-      font-size: 12px;
+      font-size: 10px;
       color: white;
     }
 
@@ -195,13 +195,13 @@
 
     .url-item .status {
       margin-right: 10px;
-      width: 20px;
-      height: 20px;
+      width: 12px;
+      height: 12px;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 12px;
+      font-size: 8px;
       color: white;
     }
 
@@ -428,44 +428,28 @@
         updateStep('stepValidation', 'in-progress', 'Vérification de l\'URL...');
         const validatedUrl = validateAndFixUrl(url);
         if (!validatedUrl.includes('gofile.io')) {
-          throw new Error('URL GoFile invalide');
+          throw new Error('URL invalide');
         }
         updateStep('stepValidation', 'completed', 'URL validée');
 
         // Étape 2: Extraction
-        updateStep('stepExtraction', 'in-progress', 'Extraction des informations du fichier...');
+        updateStep('stepExtraction', 'in-progress', 'Extraction des informations...');
         
-        let retryCount = 0;
-        const maxRetries = 3;
-        let result;
-        
-        while (retryCount < maxRetries) {
-          const response = await fetch('/api/gofile/extract', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ url: validatedUrl })
-          });
+        const response = await fetch('/api/gofile/extract', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ url: validatedUrl })
+        });
 
-          result = await response.json();
+        const result = await response.json();
 
-          if (response.ok && result.files) {
-            break;
-          }
-
-          retryCount++;
-          if (retryCount < maxRetries) {
-            updateStep('stepExtraction', 'in-progress', `Nouvelle tentative (${retryCount}/${maxRetries})...`);
-            await new Promise(resolve => setTimeout(resolve, 2000)); // Attendre 2 secondes entre les tentatives
-          }
+        if (!response.ok || !result.files) {
+          throw new Error('Extraction impossible');
         }
 
-        if (!result || !result.files) {
-          throw new Error('Aucun fichier trouvé après plusieurs tentatives');
-        }
-
-        updateStep('stepExtraction', 'completed', 'Informations extraites avec succès');
+        updateStep('stepExtraction', 'completed', 'Informations extraites');
         
         // Calculer les statistiques des fichiers
         const fileStats = {
@@ -477,14 +461,14 @@
         const totalFiles = Object.values(fileStats).reduce((a, b) => a + b, 0);
         
         if (totalFiles === 0) {
-          throw new Error('Aucun fichier média trouvé dans ce lien');
+          throw new Error('Aucun fichier trouvé');
         }
         
         // Mettre à jour l'étape de téléchargement
-        updateStep('stepDownload', 'completed', `${totalFiles} fichier(s) détecté(s)`);
+        updateStep('stepDownload', 'completed', `${totalFiles} fichier(s)`);
         
         // Mettre à jour l'étape de finalisation
-        updateStep('stepComplete', 'completed', `Extraction terminée : ${totalFiles} fichier(s) traité(s)`);
+        updateStep('stepComplete', 'completed', `${totalFiles} fichier(s) traité(s)`);
         
         // Mettre à jour le statut de l'URL avec les détails
         updateUrlStatus(index, 'completed', '', fileStats);
@@ -492,16 +476,12 @@
         // Mettre la barre de progression à 100%
         document.getElementById('downloadProgressBar').style.width = '100%';
         
-        // Afficher un message de succès
-        showMessage(`${totalFiles} fichier(s) extrait(s) avec succès de ${url}`, 'success');
-        
       } catch (error) {
         const currentStep = document.querySelector('.step.in-progress');
         if (currentStep) {
           updateStep(currentStep.id, 'error', error.message);
         }
         updateUrlStatus(index, 'error', error.message);
-        showMessage(`Erreur pour ${url}: ${error.message}`, 'error');
       } finally {
         // Passer à l'URL suivante
         urlQueue.shift();
