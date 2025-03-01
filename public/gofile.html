@@ -435,56 +435,75 @@
         // Étape 2: Extraction
         updateStep('stepExtraction', 'in-progress', 'Extraction des informations du fichier...');
         
-        const response = await fetch('/api/gofile/extract', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ url: validatedUrl })
-        });
+        let retryCount = 0;
+        const maxRetries = 3;
+        let result;
+        
+        while (retryCount < maxRetries) {
+          const response = await fetch('/api/gofile/extract', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ url: validatedUrl })
+          });
 
-        const result = await response.json();
+          result = await response.json();
 
-        if (response.ok) {
-          updateStep('stepExtraction', 'completed', 'Informations extraites avec succès');
-          
-          // Calculer les statistiques des fichiers
-          const fileStats = {
-            videos: result.files ? result.files.filter(f => f.type === 'video').length : 0,
-            images: result.files ? result.files.filter(f => f.type === 'image').length : 0,
-            audios: result.files ? result.files.filter(f => f.type === 'audio').length : 0
-          };
-          
-          const totalFiles = Object.values(fileStats).reduce((a, b) => a + b, 0);
-          
-          // Mettre à jour l'étape de téléchargement
-          updateStep('stepDownload', 'completed', `${totalFiles} fichier(s) détecté(s)`);
-          
-          // Mettre à jour l'étape de finalisation
-          updateStep('stepComplete', 'completed', `Extraction terminée : ${totalFiles} fichier(s) traité(s)`);
-          
-          // Mettre à jour le statut de l'URL
-          updateUrlStatus(index, 'completed', '', fileStats);
-          
-          // Mettre la barre de progression à 100%
-          document.getElementById('downloadProgressBar').style.width = '100%';
-          
-          // Passer à l'URL suivante
-          urlQueue.shift();
-          isProcessing = false;
-          processNextUrl();
-          
-        } else {
-          throw new Error(result.error || 'Erreur lors de l\'extraction');
+          if (response.ok && result.files) {
+            break;
+          }
+
+          retryCount++;
+          if (retryCount < maxRetries) {
+            updateStep('stepExtraction', 'in-progress', `Nouvelle tentative (${retryCount}/${maxRetries})...`);
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Attendre 2 secondes entre les tentatives
+          }
         }
+
+        if (!result || !result.files) {
+          throw new Error('Aucun fichier trouvé après plusieurs tentatives');
+        }
+
+        updateStep('stepExtraction', 'completed', 'Informations extraites avec succès');
+        
+        // Calculer les statistiques des fichiers
+        const fileStats = {
+          videos: result.files.filter(f => f.type === 'video').length,
+          images: result.files.filter(f => f.type === 'image').length,
+          audios: result.files.filter(f => f.type === 'audio').length
+        };
+        
+        const totalFiles = Object.values(fileStats).reduce((a, b) => a + b, 0);
+        
+        if (totalFiles === 0) {
+          throw new Error('Aucun fichier média trouvé dans ce lien');
+        }
+        
+        // Mettre à jour l'étape de téléchargement
+        updateStep('stepDownload', 'completed', `${totalFiles} fichier(s) détecté(s)`);
+        
+        // Mettre à jour l'étape de finalisation
+        updateStep('stepComplete', 'completed', `Extraction terminée : ${totalFiles} fichier(s) traité(s)`);
+        
+        // Mettre à jour le statut de l'URL avec les détails
+        updateUrlStatus(index, 'completed', '', fileStats);
+        
+        // Mettre la barre de progression à 100%
+        document.getElementById('downloadProgressBar').style.width = '100%';
+        
+        // Afficher un message de succès
+        showMessage(`${totalFiles} fichier(s) extrait(s) avec succès de ${url}`, 'success');
+        
       } catch (error) {
         const currentStep = document.querySelector('.step.in-progress');
         if (currentStep) {
           updateStep(currentStep.id, 'error', error.message);
         }
         updateUrlStatus(index, 'error', error.message);
-        
-        // Passer à l'URL suivante même en cas d'erreur
+        showMessage(`Erreur pour ${url}: ${error.message}`, 'error');
+      } finally {
+        // Passer à l'URL suivante
         urlQueue.shift();
         isProcessing = false;
         processNextUrl();
