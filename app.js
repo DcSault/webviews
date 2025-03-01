@@ -29,13 +29,13 @@ app.use((req, res, next) => {
 app.use(compression());
 
 // Création des répertoires nécessaires
-const dataDir = path.join(__dirname, 'data');
+const dataDir = '/app/data';  // Chemin dans le conteneur Docker
 const mediaDir = path.join(dataDir, 'media');
 const imagesDir = path.join(mediaDir, 'images');
 const videosDir = path.join(mediaDir, 'videos');
 const audioDir = path.join(mediaDir, 'audio');
 const otherDir = path.join(mediaDir, 'other');
-const logsDir = path.join(__dirname, 'logs');
+const logsDir = '/app/logs';  // Chemin dans le conteneur Docker
 const metadataPath = path.join(dataDir, 'metadata.json');
 
 // Vérification et création des répertoires
@@ -259,10 +259,13 @@ app.get('/api/media', cacheMiddleware(300), async (req, res) => {
 
         // Vérifier l'existence des fichiers
         const validatedData = await Promise.all(paginatedData.map(async (item) => {
-            const filePath = path.join(__dirname, 'data', 'media', `${item.type}s`, item.filename);
+            const filePath = path.join(mediaDir, `${item.type}s`, item.filename);
             try {
                 await fs.access(filePath);
-                return item;
+                return {
+                    ...item,
+                    filePath: `/data/media/${item.type}s/${item.filename}`
+                };
             } catch (err) {
                 console.warn(`Fichier non trouvé: ${filePath}`);
                 return null;
@@ -423,6 +426,12 @@ app.post('/api/gofile/extract', async (req, res) => {
 
 // Optimisation de la gestion des fichiers statiques
 app.use('/data/media', (req, res, next) => {
+    // Ajout des headers CORS pour permettre l'accès aux médias
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    
+    // Cache et compression
     res.setHeader('Cache-Control', 'public, max-age=31536000');
     express.static(mediaDir, {
         maxAge: '1y',

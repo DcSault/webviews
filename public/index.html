@@ -369,7 +369,7 @@
         wrapper.className = 'media-wrapper';
 
         let mediaElement;
-        const mediaPath = `/data/media/${item.type}s/${item.filename}`;
+        const mediaPath = item.filePath;
 
         if (item.type === 'video') {
           mediaElement = document.createElement('video');
@@ -377,6 +377,7 @@
           mediaElement.controls = true;
           mediaElement.preload = 'none';
           mediaElement.playsInline = true;
+          mediaElement.muted = true; // Ajouter muted pour permettre la lecture automatique
           
           const source = document.createElement('source');
           source.src = mediaPath;
@@ -384,20 +385,38 @@
           mediaElement.appendChild(source);
 
           // Gérer les erreurs de chargement
-          mediaElement.onerror = () => {
-            console.error(`Erreur de chargement de la vidéo: ${item.filename}`);
+          mediaElement.onerror = (e) => {
+            console.error(`Erreur de chargement de la vidéo: ${item.filename}`, e);
             wrapper.innerHTML = `
               <div class="media-error">
                 <p>Erreur de chargement de la vidéo</p>
                 <p>Nom: ${item.originalName}</p>
+                <p>Chemin: ${mediaPath}</p>
               </div>
             `;
+          };
+
+          // Ajouter un gestionnaire de succès
+          mediaElement.onloadeddata = () => {
+            console.log(`Vidéo chargée avec succès: ${item.filename}`);
           };
         } else if (item.type === 'image') {
           mediaElement = document.createElement('img');
           mediaElement.className = 'media-item lazy-load';
           mediaElement.src = mediaPath;
           mediaElement.alt = item.description || item.originalName;
+
+          // Gérer les erreurs de chargement des images
+          mediaElement.onerror = () => {
+            console.error(`Erreur de chargement de l'image: ${item.filename}`);
+            wrapper.innerHTML = `
+              <div class="media-error">
+                <p>Erreur de chargement de l'image</p>
+                <p>Nom: ${item.originalName}</p>
+                <p>Chemin: ${mediaPath}</p>
+              </div>
+            `;
+          };
         }
 
         if (mediaElement) {
