@@ -5,6 +5,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gestionnaire de Médias</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
   <style>
     /* Reset et styles de base */
     * {
@@ -259,261 +261,160 @@
   </style>
 </head>
 <body>
-  <header>
-    <h1>Médiathèque</h1>
-    <nav>
+  <nav class="navbar">
+    <div class="nav-content">
+      <h1>Gestionnaire de Médias</h1>
+      <div class="nav-links">
         <a href="/" class="active">Accueil</a>
         <a href="/upload.html">Upload</a>
-        <a href="/gofile.html">Gofile</a>
-        <button id="toggleBlur" class="blur-btn">Désactiver le flou</button>
-        <a href="/logout" class="logout-btn">Déconnexion</a>
-    </nav>
-</header>
-  
-  <main>
-    <div class="search-bar">
-      <input type="text" id="searchInput" placeholder="Rechercher par expéditeur ou description...">
+        <a href="/gofile.html">GoFile</a>
+        <a href="/logout">Déconnexion</a>
+      </div>
     </div>
-    
+  </nav>
+
+  <div class="container">
     <div class="filters">
-      <button data-filter="all" class="active">Tous</button>
-      <button data-filter="image">Images</button>
-      <button data-filter="video">Vidéos</button>
-      <button data-filter="audio">Audio</button>
+      <select id="typeFilter" class="form-control">
+        <option value="all">Tous les types</option>
+        <option value="video">Vidéos</option>
+        <option value="image">Images</option>
+        <option value="audio">Audio</option>
+        <option value="other">Autres</option>
+      </select>
+      <input type="text" id="searchInput" class="form-control" placeholder="Rechercher...">
     </div>
-    
-    <div class="media-container" id="mediaContainer">
-      <!-- Les médias seront injectés ici via JavaScript -->
+
+    <div id="mediaGrid" class="media-grid"></div>
+
+    <div class="pagination">
+      <button id="prevPage" class="btn btn-secondary">Précédent</button>
+      <span class="current-page">Page <span id="currentPage">1</span> sur <span id="totalPages">1</span></span>
+      <button id="nextPage" class="btn btn-secondary">Suivant</button>
     </div>
-  </main>
-  
+  </div>
+
   <footer>
     <p>© 2025 - Gestionnaire de Médias</p>
   </footer>
   
   <script>
     let currentPage = 1;
-    let isLoading = false;
-    let hasMoreItems = true;
-    const itemsPerPage = 20;
-    let currentFilter = 'all';
+    let totalPages = 1;
+    const itemsPerPage = 12;
 
-    // Fonction pour formater la taille du fichier
-    function formatFileSize(bytes) {
-      if (bytes === 0) return '0 Bytes';
-      const k = 1024;
-      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
-
-    // Intersection Observer pour le chargement différé des médias
-    const mediaObserver = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          const mediaElement = entry.target;
-          if (mediaElement.tagName === 'VIDEO') {
-            mediaElement.preload = 'metadata';
-          }
-          mediaElement.classList.add('loaded');
-          mediaObserver.unobserve(mediaElement);
-        }
-      });
-    }, {
-      threshold: 0.1,
-      rootMargin: '50px'
-    });
-
-    // Observer pour la pagination infinie
-    const loadMoreObserver = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && !isLoading && hasMoreItems) {
-        loadNextPage();
-      }
-    }, {
-      threshold: 0.1,
-      rootMargin: '100px'
-    });
-
-    // Fonction pour charger la page suivante
-    async function loadNextPage() {
-      if (isLoading || !hasMoreItems) return;
-      
-      isLoading = true;
+    async function loadMedia(page = 1, filter = 'all', search = '') {
       try {
-        const searchTerm = document.getElementById('searchInput').value;
-        const url = `/api/media?page=${currentPage}&limit=${itemsPerPage}&filter=${currentFilter}${searchTerm ? `&search=${encodeURIComponent(searchTerm)}` : ''}`;
-        const response = await fetch(url);
-        const mediaData = await response.json();
+        const response = await fetch(`/api/media?page=${page}&limit=${itemsPerPage}&filter=${filter}&search=${search}`);
+        const data = await response.json();
         
-        if (mediaData.data && mediaData.data.length > 0) {
-          appendMediaItems(mediaData.data);
-          currentPage++;
-          hasMoreItems = mediaData.hasMore;
-        } else {
-          hasMoreItems = false;
-        }
+        if (!response.ok) throw new Error(data.error || 'Erreur lors du chargement des médias');
+        
+        displayMedia(data.data);
+        updatePagination(data.page, data.totalPages);
       } catch (error) {
-        console.error('Erreur lors du chargement des médias:', error);
-      } finally {
-        isLoading = false;
-        updateLoadingIndicator();
+        console.error('Erreur:', error);
+        showError('Erreur lors du chargement des médias');
       }
     }
 
-    // Fonction pour ajouter des médias au conteneur
-    function appendMediaItems(media) {
-      const container = document.getElementById('mediaContainer');
-      
-      media.forEach(item => {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'media-wrapper';
+    function displayMedia(mediaItems) {
+      const grid = document.getElementById('mediaGrid');
+      grid.innerHTML = '';
 
-        let mediaElement;
-        const mediaPath = item.filePath;
-
-        if (item.type === 'video') {
-          mediaElement = document.createElement('video');
-          mediaElement.className = 'media-item video lazy-load';
-          mediaElement.controls = true;
-          mediaElement.preload = 'none';
-          mediaElement.playsInline = true;
-          mediaElement.muted = true; // Ajouter muted pour permettre la lecture automatique
-          
-          const source = document.createElement('source');
-          source.src = mediaPath;
-          source.type = item.mediaType;
-          mediaElement.appendChild(source);
-
-          // Gérer les erreurs de chargement
-          mediaElement.onerror = (e) => {
-            console.error(`Erreur de chargement de la vidéo: ${item.filename}`, e);
-            wrapper.innerHTML = `
-              <div class="media-error">
-                <p>Erreur de chargement de la vidéo</p>
-                <p>Nom: ${item.originalName}</p>
-                <p>Chemin: ${mediaPath}</p>
-              </div>
-            `;
-          };
-
-          // Ajouter un gestionnaire de succès
-          mediaElement.onloadeddata = () => {
-            console.log(`Vidéo chargée avec succès: ${item.filename}`);
-          };
-        } else if (item.type === 'image') {
-          mediaElement = document.createElement('img');
-          mediaElement.className = 'media-item lazy-load';
-          mediaElement.src = mediaPath;
-          mediaElement.alt = item.description || item.originalName;
-
-          // Gérer les erreurs de chargement des images
-          mediaElement.onerror = () => {
-            console.error(`Erreur de chargement de l'image: ${item.filename}`);
-            wrapper.innerHTML = `
-              <div class="media-error">
-                <p>Erreur de chargement de l'image</p>
-                <p>Nom: ${item.originalName}</p>
-                <p>Chemin: ${mediaPath}</p>
-              </div>
-            `;
-          };
-        }
-
-        if (mediaElement) {
-          wrapper.appendChild(mediaElement);
-          
-          const info = document.createElement('div');
-          info.className = 'media-info';
-          info.innerHTML = `
-            <p><strong>Nom:</strong> ${item.originalName}</p>
-            ${item.description ? `<p><strong>Description:</strong> ${item.description}</p>` : ''}
-            <p><strong>Type:</strong> ${item.type}</p>
-            <p><strong>Taille:</strong> ${formatFileSize(item.size)}</p>
-            ${item.sender ? `<p><strong>Expéditeur:</strong> ${item.sender}</p>` : ''}
-          `;
-          wrapper.appendChild(info);
-          
-          container.appendChild(wrapper);
-          mediaObserver.observe(mediaElement);
-        }
+      mediaItems.forEach(item => {
+        const mediaElement = createMediaElement(item);
+        grid.appendChild(mediaElement);
       });
     }
 
-    // Fonction pour ajouter les indicateurs de chargement
-    function updateLoadingIndicator() {
-      let indicator = document.querySelector('.loading-indicator');
-      if (!indicator) {
-        indicator = document.createElement('div');
-        indicator.className = 'loading-indicator';
-        document.getElementById('mediaContainer').appendChild(indicator);
-      }
-
-      if (isLoading) {
-        indicator.innerHTML = '<div class="loading-spinner"></div>';
-      } else if (!hasMoreItems) {
-        indicator.innerHTML = '<p>Tous les médias ont été chargés</p>';
+    function createMediaElement(item) {
+      const div = document.createElement('div');
+      div.className = 'media-item';
+      
+      let mediaContent = '';
+      if (item.type === 'video') {
+        mediaContent = `<video src="${item.filePath}" controls></video>`;
+      } else if (item.type === 'image') {
+        mediaContent = `<img src="${item.filePath}" alt="${item.originalName}">`;
+      } else if (item.type === 'audio') {
+        mediaContent = `<audio src="${item.filePath}" controls></audio>`;
       } else {
-        indicator.innerHTML = '';
+        mediaContent = `<div class="file-icon">📄</div>`;
       }
 
-      // Réinitialiser l'observer pour le chargement infini
-      loadMoreObserver.disconnect();
-      if (hasMoreItems) {
-        loadMoreObserver.observe(indicator);
-      }
+      div.innerHTML = `
+        ${mediaContent}
+        <div class="media-content">
+          <h3 class="media-title">${item.originalName}</h3>
+          <p>${item.description || ''}</p>
+          <small>Ajouté par: ${item.sender || 'Anonyme'}</small>
+          <button onclick="deleteMedia('${item.id}')" class="btn btn-secondary">Supprimer</button>
+        </div>
+      `;
+
+      return div;
     }
 
-    // Configuration des filtres
-    function setupFilters() {
-      const filterButtons = document.querySelectorAll('.filters button');
+    function updatePagination(page, total) {
+      currentPage = page;
+      totalPages = total;
       
-      filterButtons.forEach(button => {
-        button.addEventListener('click', () => {
-          currentFilter = button.getAttribute('data-filter');
-          
-          // Mettre à jour les classes actives
-          filterButtons.forEach(btn => btn.classList.remove('active'));
-          button.classList.add('active');
-          
-          // Réinitialiser et recharger avec le filtre
-          resetMediaLoading();
+      document.getElementById('currentPage').textContent = page;
+      document.getElementById('totalPages').textContent = total;
+      
+      document.getElementById('prevPage').disabled = page <= 1;
+      document.getElementById('nextPage').disabled = page >= total;
+    }
+
+    async function deleteMedia(id) {
+      if (!confirm('Voulez-vous vraiment supprimer ce média ?')) return;
+
+      try {
+        const response = await fetch(`/api/media/${id}`, {
+          method: 'DELETE'
         });
-      });
+        
+        if (!response.ok) throw new Error('Erreur lors de la suppression');
+        
+        loadMedia(currentPage, document.getElementById('typeFilter').value, document.getElementById('searchInput').value);
+      } catch (error) {
+        console.error('Erreur:', error);
+        showError('Erreur lors de la suppression du média');
+      }
     }
 
-    // Fonction pour réinitialiser le chargement
-    function resetMediaLoading() {
-      const container = document.getElementById('mediaContainer');
-      container.innerHTML = '';
-      currentPage = 1;
-      hasMoreItems = true;
-      isLoading = false;
-      loadNextPage();
+    function showError(message) {
+      const alert = document.createElement('div');
+      alert.className = 'alert alert-error';
+      alert.textContent = message;
+      document.querySelector('.container').insertBefore(alert, document.querySelector('.filters'));
+      setTimeout(() => alert.remove(), 5000);
     }
 
-    // Configuration de la recherche
-    const searchInput = document.getElementById('searchInput');
+    // Event Listeners
+    document.getElementById('prevPage').addEventListener('click', () => {
+      if (currentPage > 1) loadMedia(currentPage - 1, document.getElementById('typeFilter').value, document.getElementById('searchInput').value);
+    });
+
+    document.getElementById('nextPage').addEventListener('click', () => {
+      if (currentPage < totalPages) loadMedia(currentPage + 1, document.getElementById('typeFilter').value, document.getElementById('searchInput').value);
+    });
+
+    document.getElementById('typeFilter').addEventListener('change', (e) => {
+      loadMedia(1, e.target.value, document.getElementById('searchInput').value);
+    });
+
     let searchTimeout;
-    
-    searchInput.addEventListener('input', (e) => {
+    document.getElementById('searchInput').addEventListener('input', (e) => {
       clearTimeout(searchTimeout);
       searchTimeout = setTimeout(() => {
-        resetMediaLoading();
+        loadMedia(1, document.getElementById('typeFilter').value, e.target.value);
       }, 300);
     });
 
-    // Initialisation
-    document.addEventListener('DOMContentLoaded', () => {
-      setupFilters();
-      loadNextPage();
-    });
-
-    // Détecter quand l'utilisateur atteint le bas de la page
-    window.addEventListener('scroll', () => {
-      if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 1000) {
-        loadNextPage();
-      }
-    });
+    // Chargement initial
+    loadMedia();
   </script>
 </body>
 </html>

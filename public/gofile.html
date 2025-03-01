@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Extraction Gofile</title>
+  <title>Extraction GoFile</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <style>
     .gofile-container {
@@ -96,76 +97,80 @@
   </style>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <nav>
-        <a href="/" class="nav-link">Accueil</a>
-        <a href="/upload.html" class="nav-link">Upload</a>
-        <a href="/gofile.html" class="nav-link active">Gofile</a>
-      </nav>
-    </header>
-
-    <main>
-      <div class="gofile-container">
-        <h1>Extraction Gofile</h1>
-        <form id="gofileForm" class="gofile-form">
-          <div class="form-group">
-            <label for="gofileUrl">URL Gofile</label>
-            <input type="url" id="gofileUrl" name="url" required 
-                   placeholder="https://gofile.io/..." 
-                   pattern="https://gofile\.io/.*"
-                   title="L'URL doit commencer par https://gofile.io/">
-          </div>
-
-          <div class="btn-container">
-            <button type="submit" class="btn btn-primary">Extraire</button>
-            <button type="reset" class="btn btn-secondary">Réinitialiser</button>
-          </div>
-        </form>
-
-        <div id="statusContainer" class="status-container">
-          <p id="statusMessage"></p>
-        </div>
+  <nav class="navbar">
+    <div class="nav-content">
+      <h1>Gestionnaire de Médias</h1>
+      <div class="nav-links">
+        <a href="/">Accueil</a>
+        <a href="/upload.html">Upload</a>
+        <a href="/gofile.html" class="active">GoFile</a>
+        <a href="/logout">Déconnexion</a>
       </div>
-    </main>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="form-container">
+      <h2>Extraction GoFile</h2>
+      <form id="gofileForm" class="upload-form">
+        <div class="form-group">
+          <label for="gofileUrl">URL GoFile</label>
+          <input type="url" id="gofileUrl" name="url" class="form-control" 
+                 placeholder="https://gofile.io/..." required>
+        </div>
+        <button type="submit" class="btn btn-primary">Extraire</button>
+      </form>
+
+      <div id="extractionStatus"></div>
+    </div>
   </div>
 
   <script>
     document.getElementById('gofileForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       
-      const statusContainer = document.getElementById('statusContainer');
-      const statusMessage = document.getElementById('statusMessage');
       const url = document.getElementById('gofileUrl').value;
+      if (!url) {
+        showMessage('Veuillez entrer une URL GoFile valide', 'error');
+        return;
+      }
 
       try {
+        showMessage('Extraction en cours...', 'info');
+        
         const response = await fetch('/api/gofile/extract', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({ url })
         });
 
-        const data = await response.json();
+        const result = await response.json();
 
         if (response.ok) {
-          statusContainer.className = 'status-container success';
-          statusMessage.textContent = data.message;
+          showMessage('Extraction démarrée. Les fichiers seront disponibles dans la galerie une fois le téléchargement terminé.', 'success');
+          document.getElementById('gofileForm').reset();
         } else {
-          statusContainer.className = 'status-container error';
-          statusMessage.textContent = data.error || 'Une erreur est survenue';
+          throw new Error(result.error || 'Erreur lors de l\'extraction');
         }
       } catch (error) {
-        statusContainer.className = 'status-container error';
-        statusMessage.textContent = 'Erreur de connexion au serveur';
+        showMessage(error.message, 'error');
       }
     });
 
-    document.getElementById('gofileForm').addEventListener('reset', () => {
-      const statusContainer = document.getElementById('statusContainer');
-      statusContainer.style.display = 'none';
-    });
+    function showMessage(message, type = 'success') {
+      const statusDiv = document.getElementById('extractionStatus');
+      statusDiv.className = `alert alert-${type}`;
+      statusDiv.textContent = message;
+      statusDiv.style.display = 'block';
+      
+      if (type !== 'info') {
+        setTimeout(() => {
+          statusDiv.style.display = 'none';
+        }, 5000);
+      }
+    }
   </script>
 </body>
 </html> 
