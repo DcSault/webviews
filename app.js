@@ -449,24 +449,24 @@ app.use('/data/media', (req, res, next) => {
 // Route pour les statistiques du dashboard
 app.get('/api/stats', async (req, res) => {
   try {
-    // Récupération des fichiers
-    const files = await Media.find();
+    // Récupération des métadonnées
+    const metadata = await getMetadata();
     
     // Statistiques générales
-    const totalFiles = files.length;
-    const totalStorage = files.reduce((acc, file) => acc + file.size, 0);
-    const todayFiles = files.filter(file => {
-      const today = new Date();
-      const fileDate = new Date(file.createdAt);
-      return fileDate.toDateString() === today.toDateString();
+    const totalFiles = metadata.length;
+    const totalStorage = metadata.reduce((acc, file) => acc + file.size, 0);
+    const today = new Date().toDateString();
+    const todayFiles = metadata.filter(file => {
+      const fileDate = new Date(file.timestamp);
+      return fileDate.toDateString() === today;
     }).length;
     
     // Distribution des types de fichiers
     const fileTypes = {
-      images: files.filter(f => f.type === 'image').length,
-      videos: files.filter(f => f.type === 'video').length,
-      audio: files.filter(f => f.type === 'audio').length,
-      others: files.filter(f => !['image', 'video', 'audio'].includes(f.type)).length
+      images: metadata.filter(f => f.type === 'image').length,
+      videos: metadata.filter(f => f.type === 'video').length,
+      audio: metadata.filter(f => f.type === 'audio').length,
+      others: metadata.filter(f => !['image', 'video', 'audio'].includes(f.type)).length
     };
 
     // Activité d'upload sur 30 jours
@@ -481,9 +481,10 @@ app.get('/api/stats', async (req, res) => {
     for (let i = 0; i < 30; i++) {
       const date = new Date();
       date.setDate(date.getDate() - i);
-      const count = files.filter(file => {
-        const fileDate = new Date(file.createdAt);
-        return fileDate.toDateString() === date.toDateString();
+      const dateString = date.toDateString();
+      const count = metadata.filter(file => {
+        const fileDate = new Date(file.timestamp);
+        return fileDate.toDateString() === dateString;
       }).length;
       
       uploadActivity.dates.unshift(date.toLocaleDateString());
@@ -494,20 +495,20 @@ app.get('/api/stats', async (req, res) => {
     const storageHistory = {
       dates: uploadActivity.dates,
       values: uploadActivity.counts.map((count, index) => {
-        return files
-          .filter(file => new Date(file.createdAt) <= new Date(thirtyDaysAgo.getTime() + (index * 24 * 60 * 60 * 1000)))
+        return metadata
+          .filter(file => new Date(file.timestamp) <= new Date(thirtyDaysAgo.getTime() + (index * 24 * 60 * 60 * 1000)))
           .reduce((acc, file) => acc + file.size, 0);
       })
     };
 
     // Activité récente
-    const recentActivity = files
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    const recentActivity = metadata
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
       .slice(0, 10)
       .map(file => ({
         type: 'upload',
         description: `${file.originalName} (${formatSize(file.size)})`,
-        timestamp: file.createdAt
+        timestamp: file.timestamp
       }));
 
     // Réponse
