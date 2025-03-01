@@ -175,6 +175,63 @@
       width: 0;
       transition: width 0.3s ease;
     }
+
+    .url-list {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: var(--bg-color);
+      border-radius: var(--border-radius);
+    }
+
+    .url-item {
+      display: flex;
+      align-items: center;
+      padding: 10px;
+      margin-bottom: 8px;
+      background-color: white;
+      border-radius: var(--border-radius);
+      border: 1px solid var(--border-color);
+    }
+
+    .url-item .status {
+      margin-right: 10px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: white;
+    }
+
+    .url-item .status.pending {
+      background-color: #6c757d;
+    }
+
+    .url-item .status.processing {
+      background-color: #007bff;
+      animation: pulse 1.5s infinite;
+    }
+
+    .url-item .status.completed {
+      background-color: #28a745;
+    }
+
+    .url-item .status.error {
+      background-color: #dc3545;
+    }
+
+    .url-item .url-text {
+      flex: 1;
+      word-break: break-all;
+    }
+
+    textarea.form-control {
+      resize: vertical;
+      min-height: 150px;
+      font-family: monospace;
+    }
   </style>
 </head>
 <body>
@@ -196,12 +253,18 @@
       <h2>Extraction GoFile</h2>
       <form id="gofileForm" class="upload-form">
         <div class="form-group">
-          <label for="gofileUrl">URL GoFile</label>
-          <input type="url" id="gofileUrl" name="url" class="form-control" 
-                 placeholder="https://gofile.io/..." required>
+          <label for="gofileUrls">URLs GoFile (une par ligne)</label>
+          <textarea id="gofileUrls" name="urls" class="form-control" 
+                   placeholder="https://gofile.io/...&#10;https://gofile.io/...&#10;..." 
+                   rows="10" required></textarea>
         </div>
         <button type="submit" class="btn btn-primary">Extraire</button>
       </form>
+
+      <div class="url-list" id="urlList" style="margin-top: 20px;">
+        <h3>Liste des URLs à traiter</h3>
+        <div class="url-items" id="urlItems"></div>
+      </div>
 
       <div class="progress-steps" id="progressSteps">
         <div class="step pending" id="stepValidation">
@@ -245,6 +308,9 @@
   </div>
 
   <script>
+    let urlQueue = [];
+    let isProcessing = false;
+
     function updateStep(stepId, status, details = '') {
       const step = document.getElementById(stepId);
       step.className = `step ${status}`;
@@ -264,10 +330,8 @@
     function validateAndFixUrl(url) {
       if (!url) return '';
       
-      // Supprimer les espaces
       url = url.trim();
       
-      // Corriger les erreurs courantes dans le protocole
       if (url.startsWith('ttp://')) {
         url = 'https://' + url.slice(6);
       } else if (url.startsWith('ttps://')) {
@@ -281,21 +345,45 @@
       return url;
     }
 
-    document.getElementById('gofileForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      
+    function createUrlItem(url, index) {
+      const div = document.createElement('div');
+      div.className = 'url-item';
+      div.id = `url-${index}`;
+      div.innerHTML = `
+        <div class="status pending">●</div>
+        <div class="url-text">${url}</div>
+      `;
+      return div;
+    }
+
+    function updateUrlStatus(index, status, message = '') {
+      const urlItem = document.getElementById(`url-${index}`);
+      if (urlItem) {
+        const statusDiv = urlItem.querySelector('.status');
+        statusDiv.className = `status ${status}`;
+        if (message) {
+          urlItem.querySelector('.url-text').textContent = `${urlItem.querySelector('.url-text').textContent} - ${message}`;
+        }
+      }
+    }
+
+    async function processNextUrl() {
+      if (urlQueue.length === 0 || isProcessing) {
+        return;
+      }
+
+      isProcessing = true;
+      const { url, index } = urlQueue[0];
+      updateUrlStatus(index, 'processing');
       resetSteps();
-      const urlInput = document.getElementById('gofileUrl');
-      let url = urlInput.value;
 
       try {
         // Étape 1: Validation de l'URL
         updateStep('stepValidation', 'in-progress', 'Vérification de l\'URL...');
-        url = validateAndFixUrl(url);
-        if (!url.includes('gofile.io')) {
+        const validatedUrl = validateAndFixUrl(url);
+        if (!validatedUrl.includes('gofile.io')) {
           throw new Error('URL GoFile invalide');
         }
-        urlInput.value = url; // Mettre à jour l'input avec l'URL corrigée
         updateStep('stepValidation', 'completed', 'URL validée');
 
         // Étape 2: Extraction
@@ -306,7 +394,7 @@
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ url })
+          body: JSON.stringify({ url: validatedUrl })
         });
 
         const result = await response.json();
@@ -315,7 +403,7 @@
           updateStep('stepExtraction', 'completed', 'Informations extraites avec succès');
           updateStep('stepDownload', 'in-progress', 'Téléchargement en cours...');
 
-          // Simulation de la progression (à remplacer par la vraie progression)
+          // Simulation de la progression
           let progress = 0;
           const progressInterval = setInterval(() => {
             progress += 1;
@@ -324,10 +412,14 @@
               clearInterval(progressInterval);
               updateStep('stepDownload', 'completed', 'Téléchargement terminé');
               updateStep('stepComplete', 'completed', 'Extraction terminée avec succès');
-              showMessage('Extraction terminée avec succès. Les fichiers seront disponibles dans la galerie.', 'success');
+              updateUrlStatus(index, 'completed', 'Terminé');
+              
+              // Passer à l'URL suivante
+              urlQueue.shift();
+              isProcessing = false;
+              processNextUrl();
             }
           }, 500);
-
         } else {
           throw new Error(result.error || 'Erreur lors de l\'extraction');
         }
@@ -336,8 +428,39 @@
         if (currentStep) {
           updateStep(currentStep.id, 'error', error.message);
         }
-        showMessage(error.message, 'error');
+        updateUrlStatus(index, 'error', error.message);
+        
+        // Passer à l'URL suivante même en cas d'erreur
+        urlQueue.shift();
+        isProcessing = false;
+        processNextUrl();
       }
+    }
+
+    document.getElementById('gofileForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const urlsText = document.getElementById('gofileUrls').value;
+      const urls = urlsText.split('\n').filter(url => url.trim());
+      
+      if (urls.length === 0) {
+        showMessage('Veuillez entrer au moins une URL', 'error');
+        return;
+      }
+
+      // Réinitialiser la liste des URLs
+      const urlItems = document.getElementById('urlItems');
+      urlItems.innerHTML = '';
+      urlQueue = [];
+
+      // Créer la liste des URLs à traiter
+      urls.forEach((url, index) => {
+        urlItems.appendChild(createUrlItem(url, index));
+        urlQueue.push({ url, index });
+      });
+
+      // Démarrer le traitement
+      processNextUrl();
     });
 
     function showMessage(message, type = 'success') {
