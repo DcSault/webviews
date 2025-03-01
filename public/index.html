@@ -183,6 +183,27 @@
       background-color: #000;
     }
 
+    .media-error {
+      width: 100%;
+      height: 300px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background-color: #fee;
+      color: #d33;
+      text-align: center;
+      padding: 20px;
+    }
+
+    .media-error p {
+      margin: 5px 0;
+    }
+
+    .media-error p:first-child {
+      font-weight: bold;
+    }
+
     .media-info {
       padding: 10px;
       background: rgba(255, 255, 255, 0.95);
@@ -275,6 +296,16 @@
     let isLoading = false;
     let hasMoreItems = true;
     const itemsPerPage = 20;
+    let currentFilter = 'all';
+
+    // Fonction pour formater la taille du fichier
+    function formatFileSize(bytes) {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
 
     // Intersection Observer pour le chargement différé des médias
     const mediaObserver = new IntersectionObserver((entries) => {
@@ -309,13 +340,15 @@
       
       isLoading = true;
       try {
-        const response = await fetch(`/api/media?page=${currentPage}&limit=${itemsPerPage}`);
+        const searchTerm = document.getElementById('searchInput').value;
+        const url = `/api/media?page=${currentPage}&limit=${itemsPerPage}&filter=${currentFilter}${searchTerm ? `&search=${encodeURIComponent(searchTerm)}` : ''}`;
+        const response = await fetch(url);
         const mediaData = await response.json();
         
         if (mediaData.data && mediaData.data.length > 0) {
           appendMediaItems(mediaData.data);
           currentPage++;
-          hasMoreItems = currentPage <= mediaData.totalPages;
+          hasMoreItems = mediaData.hasMore;
         } else {
           hasMoreItems = false;
         }
@@ -324,30 +357,6 @@
       } finally {
         isLoading = false;
         updateLoadingIndicator();
-      }
-    }
-
-    // Fonction pour ajouter les indicateurs de chargement
-    function updateLoadingIndicator() {
-      let indicator = document.querySelector('.loading-indicator');
-      if (!indicator) {
-        indicator = document.createElement('div');
-        indicator.className = 'loading-indicator';
-        document.getElementById('mediaContainer').appendChild(indicator);
-      }
-
-      if (isLoading) {
-        indicator.innerHTML = '<div class="loading-spinner"></div>';
-      } else if (!hasMoreItems) {
-        indicator.innerHTML = '<p>Tous les médias ont été chargés</p>';
-      } else {
-        indicator.innerHTML = '';
-      }
-
-      // Réinitialiser l'observer pour le chargement infini
-      loadMoreObserver.disconnect();
-      if (hasMoreItems) {
-        loadMoreObserver.observe(indicator);
       }
     }
 
@@ -368,7 +377,7 @@
           mediaElement.controls = true;
           mediaElement.preload = 'none';
           mediaElement.playsInline = true;
-          mediaElement.poster = '/path/to/video-poster.jpg'; // Ajouter un poster par défaut
+          
           const source = document.createElement('source');
           source.src = mediaPath;
           source.type = item.mediaType;
@@ -377,7 +386,12 @@
           // Gérer les erreurs de chargement
           mediaElement.onerror = () => {
             console.error(`Erreur de chargement de la vidéo: ${item.filename}`);
-            mediaElement.innerHTML = `<p>Erreur de chargement de la vidéo</p>`;
+            wrapper.innerHTML = `
+              <div class="media-error">
+                <p>Erreur de chargement de la vidéo</p>
+                <p>Nom: ${item.originalName}</p>
+              </div>
+            `;
           };
         } else if (item.type === 'image') {
           mediaElement = document.createElement('img');
@@ -406,14 +420,28 @@
       });
     }
 
-    // Fonction pour réinitialiser le chargement
-    function resetMediaLoading() {
-      const container = document.getElementById('mediaContainer');
-      container.innerHTML = '';
-      currentPage = 1;
-      hasMoreItems = true;
-      isLoading = false;
-      loadNextPage();
+    // Fonction pour ajouter les indicateurs de chargement
+    function updateLoadingIndicator() {
+      let indicator = document.querySelector('.loading-indicator');
+      if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.className = 'loading-indicator';
+        document.getElementById('mediaContainer').appendChild(indicator);
+      }
+
+      if (isLoading) {
+        indicator.innerHTML = '<div class="loading-spinner"></div>';
+      } else if (!hasMoreItems) {
+        indicator.innerHTML = '<p>Tous les médias ont été chargés</p>';
+      } else {
+        indicator.innerHTML = '';
+      }
+
+      // Réinitialiser l'observer pour le chargement infini
+      loadMoreObserver.disconnect();
+      if (hasMoreItems) {
+        loadMoreObserver.observe(indicator);
+      }
     }
 
     // Configuration des filtres
@@ -422,7 +450,7 @@
       
       filterButtons.forEach(button => {
         button.addEventListener('click', () => {
-          const filterValue = button.getAttribute('data-filter');
+          currentFilter = button.getAttribute('data-filter');
           
           // Mettre à jour les classes actives
           filterButtons.forEach(btn => btn.classList.remove('active'));
@@ -432,6 +460,16 @@
           resetMediaLoading();
         });
       });
+    }
+
+    // Fonction pour réinitialiser le chargement
+    function resetMediaLoading() {
+      const container = document.getElementById('mediaContainer');
+      container.innerHTML = '';
+      currentPage = 1;
+      hasMoreItems = true;
+      isLoading = false;
+      loadNextPage();
     }
 
     // Configuration de la recherche
