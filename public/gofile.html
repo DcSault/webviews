@@ -218,6 +218,10 @@
       background-color: #28a745;
     }
 
+    .url-item .status.completed.no-files {
+      background-color: #ffa500;
+    }
+
     .url-item .status.error {
       background-color: #dc3545;
     }
@@ -225,6 +229,21 @@
     .url-item .url-text {
       flex: 1;
       word-break: break-all;
+    }
+
+    .url-item .file-count {
+      margin-left: 10px;
+      font-size: 0.9em;
+      color: #666;
+    }
+
+    .file-count .count-item {
+      display: inline-block;
+      margin-right: 10px;
+    }
+
+    .file-count .count-item:last-child {
+      margin-right: 0;
     }
 
     textarea.form-control {
@@ -352,17 +371,44 @@
       div.innerHTML = `
         <div class="status pending">●</div>
         <div class="url-text">${url}</div>
+        <div class="file-count"></div>
       `;
       return div;
     }
 
-    function updateUrlStatus(index, status, message = '') {
+    function updateUrlStatus(index, status, message = '', fileStats = null) {
       const urlItem = document.getElementById(`url-${index}`);
       if (urlItem) {
         const statusDiv = urlItem.querySelector('.status');
-        statusDiv.className = `status ${status}`;
-        if (message) {
-          urlItem.querySelector('.url-text').textContent = `${urlItem.querySelector('.url-text').textContent} - ${message}`;
+        const fileCountDiv = urlItem.querySelector('.file-count');
+        
+        // Mettre à jour le statut
+        if (status === 'completed' && fileStats) {
+          const totalFiles = Object.values(fileStats).reduce((a, b) => a + b, 0);
+          statusDiv.className = `status ${status}${totalFiles === 0 ? ' no-files' : ''}`;
+        } else {
+          statusDiv.className = `status ${status}`;
+        }
+
+        // Mettre à jour le message et les statistiques
+        if (status === 'completed' && fileStats) {
+          const fileCountText = [];
+          if (fileStats.videos > 0) {
+            fileCountText.push(`<span class="count-item">${fileStats.videos} Vidéo${fileStats.videos > 1 ? 's' : ''}</span>`);
+          }
+          if (fileStats.images > 0) {
+            fileCountText.push(`<span class="count-item">${fileStats.images} Image${fileStats.images > 1 ? 's' : ''}</span>`);
+          }
+          if (fileStats.audios > 0) {
+            fileCountText.push(`<span class="count-item">${fileStats.audios} Audio${fileStats.audios > 1 ? 's' : ''}</span>`);
+          }
+          
+          const totalFiles = Object.values(fileStats).reduce((a, b) => a + b, 0);
+          urlItem.querySelector('.url-text').textContent = url;
+          fileCountDiv.innerHTML = totalFiles > 0 ? `( ${fileCountText.join(' - ')} )` : '( Aucun fichier )';
+        } else if (message) {
+          urlItem.querySelector('.url-text').textContent = url;
+          fileCountDiv.textContent = message ? ` - ${message}` : '';
         }
       }
     }
@@ -401,25 +447,33 @@
 
         if (response.ok) {
           updateStep('stepExtraction', 'completed', 'Informations extraites avec succès');
-          updateStep('stepDownload', 'in-progress', 'Téléchargement en cours...');
-
-          // Simulation de la progression
-          let progress = 0;
-          const progressInterval = setInterval(() => {
-            progress += 1;
-            document.getElementById('downloadProgressBar').style.width = `${progress}%`;
-            if (progress >= 100) {
-              clearInterval(progressInterval);
-              updateStep('stepDownload', 'completed', 'Téléchargement terminé');
-              updateStep('stepComplete', 'completed', 'Extraction terminée avec succès');
-              updateUrlStatus(index, 'completed', 'Terminé');
-              
-              // Passer à l'URL suivante
-              urlQueue.shift();
-              isProcessing = false;
-              processNextUrl();
-            }
-          }, 500);
+          
+          // Calculer les statistiques des fichiers
+          const fileStats = {
+            videos: result.files ? result.files.filter(f => f.type === 'video').length : 0,
+            images: result.files ? result.files.filter(f => f.type === 'image').length : 0,
+            audios: result.files ? result.files.filter(f => f.type === 'audio').length : 0
+          };
+          
+          const totalFiles = Object.values(fileStats).reduce((a, b) => a + b, 0);
+          
+          // Mettre à jour l'étape de téléchargement
+          updateStep('stepDownload', 'completed', `${totalFiles} fichier(s) détecté(s)`);
+          
+          // Mettre à jour l'étape de finalisation
+          updateStep('stepComplete', 'completed', `Extraction terminée : ${totalFiles} fichier(s) traité(s)`);
+          
+          // Mettre à jour le statut de l'URL
+          updateUrlStatus(index, 'completed', '', fileStats);
+          
+          // Mettre la barre de progression à 100%
+          document.getElementById('downloadProgressBar').style.width = '100%';
+          
+          // Passer à l'URL suivante
+          urlQueue.shift();
+          isProcessing = false;
+          processNextUrl();
+          
         } else {
           throw new Error(result.error || 'Erreur lors de l\'extraction');
         }
