@@ -329,6 +329,8 @@
   <script>
     let urlQueue = [];
     let isProcessing = false;
+    let processedUrls = new Set(); // Pour stocker les URLs déjà traitées
+    let processedFiles = new Set(); // Pour stocker les fichiers déjà traités
 
     function updateStep(stepId, status, details = '') {
       const step = document.getElementById(stepId);
@@ -413,6 +415,27 @@
       }
     }
 
+    function resetProcessedSets() {
+      processedUrls.clear();
+      processedFiles.clear();
+    }
+
+    function isDuplicateUrl(url) {
+      return processedUrls.has(url);
+    }
+
+    function isDuplicateFile(filename) {
+      return processedFiles.has(filename);
+    }
+
+    function addProcessedUrl(url) {
+      processedUrls.add(url);
+    }
+
+    function addProcessedFiles(files) {
+      files.forEach(file => processedFiles.add(file.name));
+    }
+
     async function processNextUrl() {
       if (urlQueue.length === 0 || isProcessing) {
         if (urlQueue.length === 0 && !isProcessing) {
@@ -433,9 +456,16 @@
         if (!validatedUrl.includes('gofile.io')) {
           throw new Error('URL invalide');
         }
+
+        // Vérifier si l'URL a déjà été traitée
+        if (isDuplicateUrl(validatedUrl)) {
+          throw new Error('URL déjà traitée');
+        }
+        addProcessedUrl(validatedUrl);
+
         updateStep('stepValidation', 'completed', 'URL validée');
 
-        // Étape 2: Extraction avec cooldown
+        // Étape 2: Extraction
         updateStep('stepExtraction', 'in-progress', 'Extraction des informations...');
         
         const response = await fetch('/api/gofile/extract', {
@@ -452,23 +482,32 @@
           throw new Error('Extraction impossible');
         }
 
+        // Vérifier les doublons de fichiers
+        const newFiles = result.files.filter(file => !isDuplicateFile(file.name));
+        if (newFiles.length === 0) {
+          throw new Error('Tous les fichiers ont déjà été traités');
+        }
+
+        // Ajouter les nouveaux fichiers à la liste des fichiers traités
+        addProcessedFiles(newFiles);
+
         updateStep('stepExtraction', 'completed', 'Informations extraites');
         
         // Calculer les statistiques des fichiers
         const fileStats = {
-          videos: result.files.filter(f => f.type === 'video').length,
-          images: result.files.filter(f => f.type === 'image').length,
-          audios: result.files.filter(f => f.type === 'audio').length
+          videos: newFiles.filter(f => f.type === 'video').length,
+          images: newFiles.filter(f => f.type === 'image').length,
+          audios: newFiles.filter(f => f.type === 'audio').length
         };
         
         const totalFiles = Object.values(fileStats).reduce((a, b) => a + b, 0);
         
         if (totalFiles === 0) {
-          throw new Error('Aucun fichier trouvé');
+          throw new Error('Aucun nouveau fichier trouvé');
         }
         
         // Mettre à jour l'étape de téléchargement
-        updateStep('stepDownload', 'completed', `${totalFiles} fichier(s)`);
+        updateStep('stepDownload', 'completed', `${totalFiles} nouveau(x) fichier(s)`);
         
         // Mettre à jour l'étape de finalisation
         updateStep('stepComplete', 'completed', `${totalFiles} fichier(s) traité(s)`);
@@ -480,7 +519,7 @@
         document.getElementById('downloadProgressBar').style.width = '100%';
 
         // Ajouter un message de fin pour cette URL
-        showMessage(`Extraction terminée pour : ${validatedUrl}`, 'success');
+        showMessage(`Extraction terminée pour : ${validatedUrl} (${totalFiles} nouveau(x) fichier(s))`, 'success');
         
       } catch (error) {
         const currentStep = document.querySelector('.step.in-progress');
@@ -489,12 +528,12 @@
         }
         updateUrlStatus(index, 'error', error.message);
       } finally {
-        // Passer à l'URL suivante après le cooldown
+        // Passer à l'URL suivante
         urlQueue.shift();
         isProcessing = false;
-
-        // Attendre que le message soit lu (cooldown de 3 secondes)
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // Attendre 10 secondes avant de passer à l'URL suivante
+        await new Promise(resolve => setTimeout(resolve, 10000));
         processNextUrl();
       }
     }
@@ -512,13 +551,20 @@
         return;
       }
 
-      // Réinitialiser la liste des URLs
+      // Vérifier les doublons dans les URLs saisies
+      const uniqueUrls = [...new Set(urls.map(url => validateAndFixUrl(url)))];
+      if (uniqueUrls.length !== urls.length) {
+        showMessage(`${urls.length - uniqueUrls.length} URL(s) en double ont été supprimée(s)`, 'info');
+      }
+
+      // Réinitialiser la liste des URLs et les ensembles de traitement
       const urlItems = document.getElementById('urlItems');
       urlItems.innerHTML = '';
       urlQueue = [];
+      resetProcessedSets();
 
       // Créer la liste des URLs à traiter
-      urls.forEach((url, index) => {
+      uniqueUrls.forEach((url, index) => {
         urlItems.appendChild(createUrlItem(url, index));
         urlQueue.push({ url, index });
       });

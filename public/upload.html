@@ -308,24 +308,24 @@
       <div id="previewContainer" class="preview-container"></div>
 
       <!-- Formulaire -->
-      <form id="uploadForm" class="upload-form">
-        <div class="form-group">
+        <form id="uploadForm" class="upload-form">
+          <div class="form-group">
           <label for="sender">Expéditeur</label>
           <input type="text" id="sender" name="sender" class="form-control" placeholder="Votre nom">
-        </div>
-        <div class="form-group">
-          <label for="description">Description</label>
+          </div>
+          <div class="form-group">
+            <label for="description">Description</label>
           <textarea id="description" name="description" class="form-control" rows="3" placeholder="Description des fichiers"></textarea>
-        </div>
+          </div>
         <button type="submit" id="submitBtn" class="btn btn-primary" disabled>
           <span>Uploader</span>
           <div class="loader" style="display: none;"></div>
-        </button>
-      </form>
-
+          </button>
+        </form>
+        
       <!-- Barre de progression -->
       <div id="uploadProgress" class="upload-progress" style="display: none;">
-        <div class="progress-bar">
+          <div class="progress-bar">
           <div class="progress-bar-fill"></div>
         </div>
         <p class="progress-text">0%</p>
@@ -334,13 +334,13 @@
       <!-- Zone de collage -->
       <div id="pasteZone" class="paste-zone" tabindex="0">
         <p>Ou collez une image depuis le presse-papier (Ctrl+V)</p>
-      </div>
-
+        </div>
+        
       <!-- Messages -->
       <div id="uploadStatus"></div>
-
+        
       <!-- Instructions -->
-      <div class="instructions">
+        <div class="instructions">
         <h3>Instructions</h3>
         <h4>Types de fichiers acceptés :</h4>
         <ul>
@@ -348,26 +348,26 @@
           <li>Vidéos : MP4, WEBM, MOV</li>
           <li>Audio : MP3, WAV, OGG</li>
           <li>Autres : PDF, TXT</li>
-        </ul>
+          </ul>
         <h4>Limites :</h4>
         <ul>
           <li>Taille maximale par fichier : 100 MB</li>
           <li>Nombre maximum de fichiers simultanés : 10</li>
-        </ul>
+              </ul>
       </div>
     </div>
   </div>
 
   <script>
     const dropZone = document.getElementById('dropZone');
-    const fileInput = document.getElementById('fileInput');
-    const previewContainer = document.getElementById('previewContainer');
+      const fileInput = document.getElementById('fileInput');
+      const previewContainer = document.getElementById('previewContainer');
     const uploadForm = document.getElementById('uploadForm');
-    const submitBtn = document.getElementById('submitBtn');
+      const submitBtn = document.getElementById('submitBtn');
     const pasteZone = document.getElementById('pasteZone');
     const progressBar = document.querySelector('.progress-bar-fill');
     const progressText = document.querySelector('.progress-text');
-    const uploadProgress = document.getElementById('uploadProgress');
+      const uploadProgress = document.getElementById('uploadProgress');
     
     let selectedFiles = new Map();
 
@@ -432,24 +432,24 @@
     function createPreview(file, id) {
       const div = document.createElement('div');
       div.className = 'preview-item';
-
-      if (file.type.startsWith('image/')) {
-        const img = document.createElement('img');
+        
+        if (file.type.startsWith('image/')) {
+          const img = document.createElement('img');
         img.src = URL.createObjectURL(file);
         div.appendChild(img);
-      } else if (file.type.startsWith('video/')) {
-        const video = document.createElement('video');
+        } else if (file.type.startsWith('video/')) {
+          const video = document.createElement('video');
         video.src = URL.createObjectURL(file);
         video.controls = true;
         div.appendChild(video);
-      } else if (file.type.startsWith('audio/')) {
+        } else if (file.type.startsWith('audio/')) {
         const audio = document.createElement('audio');
         audio.src = URL.createObjectURL(file);
         audio.controls = true;
         div.appendChild(audio);
-      } else {
-        const fileIcon = document.createElement('div');
-        fileIcon.className = 'file-icon';
+        } else {
+          const fileIcon = document.createElement('div');
+          fileIcon.className = 'file-icon';
         fileIcon.innerHTML = '📄';
         fileIcon.innerHTML += `<p>${file.name}</p>`;
         div.appendChild(fileIcon);
@@ -473,7 +473,7 @@
 
     // Upload des fichiers
     uploadForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
+          e.preventDefault();
       
       const formData = new FormData();
       selectedFiles.forEach(file => {
