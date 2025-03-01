@@ -211,6 +211,66 @@
       border: none;
       cursor: pointer;
     }
+
+    .duplicate-summary {
+      background: var(--bg-color);
+      padding: 15px;
+      border-radius: var(--border-radius);
+      margin-bottom: 20px;
+    }
+
+    .summary-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .summary-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .summary-item .label {
+      color: var(--text-color-light);
+    }
+
+    .summary-item .value {
+      font-weight: 500;
+      color: var(--primary-color);
+    }
+
+    .duplicate-group-header {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    .duplicate-group-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .duplicate-group-criteria {
+      font-size: 0.9em;
+      padding: 8px;
+      background: var(--bg-color);
+      border-radius: var(--border-radius);
+    }
+
+    .criteria-item {
+      display: inline-block;
+      margin-right: 15px;
+    }
+
+    .criteria-label {
+      color: var(--text-color-light);
+      margin-right: 5px;
+    }
+
+    .criteria-value {
+      font-family: monospace;
+    }
   </style>
 </head>
 <body>
@@ -308,8 +368,19 @@
           <button id="scanDuplicates" class="btn btn-primary">
             Rechercher les Doublons
           </button>
-          <div class="duplicate-stats" style="margin-top: 10px;">
-            <span id="duplicateCount">0</span> doublons trouvés
+          <div id="duplicateSummary" class="duplicate-summary" style="margin-top: 15px; display: none;">
+            <div class="summary-item">
+              <span class="label">Groupes de doublons :</span>
+              <span class="value" id="totalGroups">0</span>
+            </div>
+            <div class="summary-item">
+              <span class="label">Fichiers en double :</span>
+              <span class="value" id="totalDuplicates">0</span>
+            </div>
+            <div class="summary-item">
+              <span class="label">Espace récupérable :</span>
+              <span class="value" id="potentialSpaceSaving">0</span>
+            </div>
           </div>
         </div>
         <div id="duplicatesList" class="duplicates-container" style="margin-top: 20px;">
@@ -493,40 +564,57 @@
     }
 
     // Fonction pour afficher les groupes de doublons
-    function displayDuplicateGroups(groups) {
+    function displayDuplicateGroups(data) {
       const container = document.getElementById('duplicatesList');
+      const summaryDiv = document.getElementById('duplicateSummary');
       container.innerHTML = '';
-      let totalDuplicates = 0;
 
-      groups.forEach((group, index) => {
-        if (group.files.length > 1) { // Ne montrer que les groupes avec des doublons
-          totalDuplicates += group.files.length - 1;
-          const groupDiv = document.createElement('div');
-          groupDiv.className = 'duplicate-group';
-          groupDiv.id = `group-${group.id}`;
+      // Afficher le résumé
+      document.getElementById('totalGroups').textContent = data.summary.totalGroups;
+      document.getElementById('totalDuplicates').textContent = data.summary.totalDuplicates;
+      document.getElementById('potentialSpaceSaving').textContent = data.summary.potentialSpaceSaving;
+      summaryDiv.style.display = 'block';
 
-          const groupHeader = document.createElement('div');
-          groupHeader.className = 'duplicate-group-header';
-          groupHeader.innerHTML = `
-            <h4>Groupe de doublons #${index + 1}</h4>
-            <span>${group.files.length} fichiers - ${formatFileSize(group.files[0].size)}</span>
-          `;
+      data.groups.forEach((group, index) => {
+        const groupDiv = document.createElement('div');
+        groupDiv.className = 'duplicate-group';
+        groupDiv.id = `group-${group.id}`;
 
-          const filesDiv = document.createElement('div');
-          filesDiv.className = 'duplicate-files';
-          
-          group.files.forEach(file => {
-            file.groupId = group.id;
-            filesDiv.appendChild(createDuplicateFileElement(file));
-          });
+        const headerHtml = `
+          <div class="duplicate-group-header">
+            <div class="duplicate-group-title">
+              <h4>Groupe de doublons #${index + 1}</h4>
+              <span>${group.files.length} fichiers - ${group.matchCriteria.size}</span>
+            </div>
+            <div class="duplicate-group-criteria">
+              <span class="criteria-item">
+                <span class="criteria-label">Type:</span>
+                <span class="criteria-value">${group.matchCriteria.type}</span>
+              </span>
+              <span class="criteria-item">
+                <span class="criteria-label">SHA256:</span>
+                <span class="criteria-value">${group.matchCriteria.hashes.sha256}</span>
+              </span>
+              <span class="criteria-item">
+                <span class="criteria-label">MD5:</span>
+                <span class="criteria-value">${group.matchCriteria.hashes.md5}</span>
+              </span>
+            </div>
+          </div>
+        `;
 
-          groupDiv.appendChild(groupHeader);
-          groupDiv.appendChild(filesDiv);
-          container.appendChild(groupDiv);
-        }
+        const filesDiv = document.createElement('div');
+        filesDiv.className = 'duplicate-files';
+        
+        group.files.forEach(file => {
+          file.groupId = group.id;
+          filesDiv.appendChild(createDuplicateFileElement(file));
+        });
+
+        groupDiv.innerHTML = headerHtml;
+        groupDiv.appendChild(filesDiv);
+        container.appendChild(groupDiv);
       });
-
-      document.getElementById('duplicateCount').textContent = totalDuplicates;
     }
 
     // Gestionnaire de clic pour le bouton de scan
@@ -535,7 +623,7 @@
         const response = await fetch('/api/duplicates/scan');
         const data = await response.json();
         if (response.ok) {
-          displayDuplicateGroups(data.groups);
+          displayDuplicateGroups(data);
         } else {
           throw new Error(data.error || 'Erreur lors du scan des doublons');
         }

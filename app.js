@@ -540,24 +540,43 @@ function formatSize(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-// Fonction pour calculer le hash d'un fichier
-async function calculateFileHash(filePath) {
+// Fonction pour obtenir le type MIME d'un fichier
+async function getFileMimeType(filePath) {
+  const fileType = await import('file-type');
+  try {
+    const result = await fileType.fileTypeFromFile(filePath);
+    return result ? result.mime : 'application/octet-stream';
+  } catch (error) {
+    console.error('Erreur lors de la détection du type MIME:', error);
+    return 'application/octet-stream';
+  }
+}
+
+// Fonction pour calculer le hash d'un fichier avec plusieurs algorithmes
+async function calculateFileHashes(filePath) {
   return new Promise((resolve, reject) => {
-    const hash = crypto.createHash('sha256');
+    const sha256Hash = crypto.createHash('sha256');
+    const md5Hash = crypto.createHash('md5');
     const stream = fs.createReadStream(filePath);
     
     stream.on('error', err => reject(err));
-    stream.on('data', chunk => hash.update(chunk));
-    stream.on('end', () => resolve(hash.digest('hex')));
+    stream.on('data', chunk => {
+      sha256Hash.update(chunk);
+      md5Hash.update(chunk);
+    });
+    stream.on('end', () => resolve({
+      sha256: sha256Hash.digest('hex'),
+      md5: md5Hash.digest('hex')
+    }));
   });
 }
 
-// Route pour scanner les doublons
+// Route pour scanner les doublons de manière approfondie
 app.get('/api/duplicates/scan', async (req, res) => {
   try {
     const mediaDir = path.join(__dirname, 'data', 'media');
     const duplicateGroups = [];
-    const fileHashes = new Map();
+    const fileMap = new Map();
 
     // Parcourir tous les sous-dossiers de média
     for (const type of ['images', 'videos', 'audio']) {
@@ -571,28 +590,51 @@ app.get('/api/duplicates/scan', async (req, res) => {
         const stats = await fs.promises.stat(filePath);
         
         if (stats.isFile()) {
-          const hash = await calculateFileHash(filePath);
+          // Collecter toutes les informations sur le fichier
+          const hashes = await calculateFileHashes(filePath);
+          const mimeType = await getFileMimeType(filePath);
+          
           const fileInfo = {
-            id: path.parse(filename).name, // Utiliser le nom du fichier sans extension comme ID
+            id: path.parse(filename).name,
             filename,
             type,
             size: stats.size,
             timestamp: stats.mtime,
-            path: filePath
+            path: filePath,
+            mimeType,
+            hashes
           };
 
-          if (fileHashes.has(hash)) {
-            const groupId = fileHashes.get(hash).groupId;
+          // Créer une clé unique basée sur plusieurs critères
+          const fileKey = `${hashes.sha256}_${stats.size}_${mimeType}`;
+
+          if (fileMap.has(fileKey)) {
+            const groupId = fileMap.get(fileKey).groupId;
             const group = duplicateGroups.find(g => g.id === groupId);
             if (group) {
               group.files.push(fileInfo);
+              // Trier les fichiers du groupe par date (le plus récent en premier)
+              group.files.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
             }
           } else {
             const groupId = crypto.randomUUID();
-            fileHashes.set(hash, { groupId, fileInfo });
+            fileMap.set(fileKey, { 
+              groupId, 
+              fileInfo,
+              criteria: {
+                size: stats.size,
+                mimeType,
+                hashes
+              }
+            });
             duplicateGroups.push({
               id: groupId,
-              files: [fileInfo]
+              files: [fileInfo],
+              criteria: {
+                size: stats.size,
+                mimeType,
+                hashes
+              }
             });
           }
         }
@@ -600,9 +642,35 @@ app.get('/api/duplicates/scan', async (req, res) => {
     }
 
     // Ne renvoyer que les groupes qui ont des doublons
-    const groupsWithDuplicates = duplicateGroups.filter(group => group.files.length > 1);
+    const groupsWithDuplicates = duplicateGroups
+      .filter(group => group.files.length > 1)
+      .map(group => ({
+        ...group,
+        matchCriteria: {
+          size: formatSize(group.criteria.size),
+          type: group.criteria.mimeType,
+          hashes: {
+            sha256: group.criteria.hashes.sha256.substring(0, 8) + '...',
+            md5: group.criteria.hashes.md5.substring(0, 8) + '...'
+          }
+        }
+      }));
     
-    res.json({ groups: groupsWithDuplicates });
+    // Trier les groupes par taille de fichier (du plus grand au plus petit)
+    groupsWithDuplicates.sort((a, b) => b.criteria.size - a.criteria.size);
+    
+    res.json({ 
+      groups: groupsWithDuplicates,
+      summary: {
+        totalGroups: groupsWithDuplicates.length,
+        totalDuplicates: groupsWithDuplicates.reduce((acc, group) => acc + group.files.length - 1, 0),
+        potentialSpaceSaving: formatSize(
+          groupsWithDuplicates.reduce((acc, group) => 
+            acc + (group.files.length - 1) * group.criteria.size, 0
+          )
+        )
+      }
+    });
   } catch (error) {
     console.error('Erreur lors du scan des doublons:', error);
     res.status(500).json({ error: 'Erreur lors du scan des doublons' });
