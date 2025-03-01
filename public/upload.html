@@ -291,11 +291,23 @@
   <div class="container">
     <div class="form-container">
       <h2>Upload de Fichiers</h2>
+      
+      <!-- Zone de glisser-déposer -->
+      <div id="dropZone" class="dropzone">
+        <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <p>Glissez vos fichiers ici ou cliquez pour sélectionner</p>
+        <input type="file" id="fileInput" multiple style="display: none;">
+      </div>
+
+      <!-- Zone de prévisualisation -->
+      <div id="previewContainer" class="preview-container"></div>
+
+      <!-- Formulaire -->
       <form id="uploadForm" class="upload-form">
-        <div class="form-group">
-          <label for="files">Sélectionner des fichiers</label>
-          <input type="file" id="files" name="files" multiple class="form-control" required>
-        </div>
         <div class="form-group">
           <label for="sender">Expéditeur</label>
           <input type="text" id="sender" name="sender" class="form-control" placeholder="Votre nom">
@@ -304,67 +316,220 @@
           <label for="description">Description</label>
           <textarea id="description" name="description" class="form-control" rows="3" placeholder="Description des fichiers"></textarea>
         </div>
-        <button type="submit" class="btn btn-primary">Uploader</button>
+        <button type="submit" id="submitBtn" class="btn btn-primary" disabled>
+          <span>Uploader</span>
+          <div class="loader" style="display: none;"></div>
+        </button>
       </form>
 
+      <!-- Barre de progression -->
       <div id="uploadProgress" class="upload-progress" style="display: none;">
         <div class="progress-bar">
-          <div class="progress-fill"></div>
+          <div class="progress-bar-fill"></div>
         </div>
         <p class="progress-text">0%</p>
       </div>
 
+      <!-- Zone de collage -->
+      <div id="pasteZone" class="paste-zone" tabindex="0">
+        <p>Ou collez une image depuis le presse-papier (Ctrl+V)</p>
+      </div>
+
+      <!-- Messages -->
       <div id="uploadStatus"></div>
+
+      <!-- Instructions -->
+      <div class="instructions">
+        <h3>Instructions</h3>
+        <h4>Types de fichiers acceptés :</h4>
+        <ul>
+          <li>Images : JPG, PNG, GIF, WEBP</li>
+          <li>Vidéos : MP4, WEBM, MOV</li>
+          <li>Audio : MP3, WAV, OGG</li>
+          <li>Autres : PDF, TXT</li>
+        </ul>
+        <h4>Limites :</h4>
+        <ul>
+          <li>Taille maximale par fichier : 100 MB</li>
+          <li>Nombre maximum de fichiers simultanés : 10</li>
+        </ul>
+      </div>
     </div>
   </div>
 
   <script>
-    document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const previewContainer = document.getElementById('previewContainer');
+    const uploadForm = document.getElementById('uploadForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const pasteZone = document.getElementById('pasteZone');
+    const progressBar = document.querySelector('.progress-bar-fill');
+    const progressText = document.querySelector('.progress-text');
+    const uploadProgress = document.getElementById('uploadProgress');
+    
+    let selectedFiles = new Map();
+
+    // Gestion du glisser-déposer
+    dropZone.addEventListener('click', () => fileInput.click());
+    
+    dropZone.addEventListener('dragover', (e) => {
       e.preventDefault();
+      dropZone.classList.add('highlight');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('highlight');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('highlight');
+      handleFiles(e.dataTransfer.files);
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      handleFiles(e.target.files);
+    });
+
+    // Gestion du collage
+    pasteZone.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const items = e.clipboardData.items;
       
-      const formData = new FormData();
-      const files = document.getElementById('files').files;
-      const sender = document.getElementById('sender').value;
-      const description = document.getElementById('description').value;
-      
-      if (files.length === 0) {
-        showMessage('Veuillez sélectionner au moins un fichier', 'error');
+      for (let item of items) {
+        if (item.type.indexOf('image') === 0) {
+          const file = item.getAsFile();
+          handleFiles([file]);
+          break;
+        }
+      }
+    });
+
+    // Gestion des fichiers
+    function handleFiles(files) {
+      if (selectedFiles.size + files.length > 10) {
+        showMessage('Maximum 10 fichiers simultanés', 'error');
         return;
       }
 
       Array.from(files).forEach(file => {
+        if (file.size > 100 * 1024 * 1024) {
+          showMessage(`${file.name} dépasse la limite de 100 MB`, 'error');
+          return;
+        }
+
+        const id = Math.random().toString(36).substring(7);
+        selectedFiles.set(id, file);
+        createPreview(file, id);
+      });
+
+      submitBtn.disabled = selectedFiles.size === 0;
+    }
+
+    // Création des prévisualisations
+    function createPreview(file, id) {
+      const div = document.createElement('div');
+      div.className = 'preview-item';
+
+      if (file.type.startsWith('image/')) {
+        const img = document.createElement('img');
+        img.src = URL.createObjectURL(file);
+        div.appendChild(img);
+      } else if (file.type.startsWith('video/')) {
+        const video = document.createElement('video');
+        video.src = URL.createObjectURL(file);
+        video.controls = true;
+        div.appendChild(video);
+      } else if (file.type.startsWith('audio/')) {
+        const audio = document.createElement('audio');
+        audio.src = URL.createObjectURL(file);
+        audio.controls = true;
+        div.appendChild(audio);
+      } else {
+        const fileIcon = document.createElement('div');
+        fileIcon.className = 'file-icon';
+        fileIcon.innerHTML = '📄';
+        fileIcon.innerHTML += `<p>${file.name}</p>`;
+        div.appendChild(fileIcon);
+      }
+
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'remove-btn';
+      removeBtn.innerHTML = '×';
+      removeBtn.onclick = () => removeFile(id, div);
+      div.appendChild(removeBtn);
+
+      previewContainer.appendChild(div);
+    }
+
+    // Suppression d'un fichier
+    function removeFile(id, element) {
+      selectedFiles.delete(id);
+      element.remove();
+      submitBtn.disabled = selectedFiles.size === 0;
+    }
+
+    // Upload des fichiers
+    uploadForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const formData = new FormData();
+      selectedFiles.forEach(file => {
         formData.append('files', file);
       });
+      
+      const sender = document.getElementById('sender').value;
+      const description = document.getElementById('description').value;
       
       if (sender) formData.append('sender', sender);
       if (description) formData.append('description', description);
 
-      const progressDiv = document.getElementById('uploadProgress');
-      const progressBar = progressDiv.querySelector('.progress-fill');
-      const progressText = progressDiv.querySelector('.progress-text');
-      progressDiv.style.display = 'block';
+      submitBtn.disabled = true;
+      submitBtn.querySelector('span').style.display = 'none';
+      submitBtn.querySelector('.loader').style.display = 'inline-block';
+      uploadProgress.style.display = 'block';
 
       try {
         const response = await fetch('/api/upload', {
           method: 'POST',
-          body: formData
+          body: formData,
+          onUploadProgress: (progressEvent) => {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            progressBar.style.width = percentCompleted + '%';
+            progressText.textContent = percentCompleted + '%';
+          }
         });
 
         const result = await response.json();
 
         if (response.ok) {
-          showMessage(`${result.message}`, 'success');
-          document.getElementById('uploadForm').reset();
+          showMessage('Upload réussi !', 'success');
+          resetForm();
         } else {
           throw new Error(result.error || 'Erreur lors de l\'upload');
         }
       } catch (error) {
         showMessage(error.message, 'error');
       } finally {
-        progressDiv.style.display = 'none';
+        submitBtn.disabled = false;
+        submitBtn.querySelector('span').style.display = 'inline';
+        submitBtn.querySelector('.loader').style.display = 'none';
+        uploadProgress.style.display = 'none';
       }
     });
 
+    // Réinitialisation du formulaire
+    function resetForm() {
+      uploadForm.reset();
+      selectedFiles.clear();
+      previewContainer.innerHTML = '';
+      submitBtn.disabled = true;
+      progressBar.style.width = '0%';
+      progressText.textContent = '0%';
+    }
+
+    // Affichage des messages
     function showMessage(message, type = 'success') {
       const statusDiv = document.getElementById('uploadStatus');
       statusDiv.className = `alert alert-${type}`;
