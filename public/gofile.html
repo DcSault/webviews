@@ -415,6 +415,9 @@
 
     async function processNextUrl() {
       if (urlQueue.length === 0 || isProcessing) {
+        if (urlQueue.length === 0 && !isProcessing) {
+          showMessage('Extraction terminée : Toutes les URLs ont été traitées', 'success');
+        }
         return;
       }
 
@@ -432,7 +435,7 @@
         }
         updateStep('stepValidation', 'completed', 'URL validée');
 
-        // Étape 2: Extraction
+        // Étape 2: Extraction avec cooldown
         updateStep('stepExtraction', 'in-progress', 'Extraction des informations...');
         
         const response = await fetch('/api/gofile/extract', {
@@ -475,6 +478,9 @@
         
         // Mettre la barre de progression à 100%
         document.getElementById('downloadProgressBar').style.width = '100%';
+
+        // Ajouter un message de fin pour cette URL
+        showMessage(`Extraction terminée pour : ${validatedUrl}`, 'success');
         
       } catch (error) {
         const currentStep = document.querySelector('.step.in-progress');
@@ -483,9 +489,12 @@
         }
         updateUrlStatus(index, 'error', error.message);
       } finally {
-        // Passer à l'URL suivante
+        // Passer à l'URL suivante après le cooldown
         urlQueue.shift();
         isProcessing = false;
+
+        // Attendre que le message soit lu (cooldown de 3 secondes)
+        await new Promise(resolve => setTimeout(resolve, 3000));
         processNextUrl();
       }
     }
@@ -494,7 +503,9 @@
       e.preventDefault();
       
       const urlsText = document.getElementById('gofileUrls').value;
-      const urls = urlsText.split('\n').filter(url => url.trim());
+      const urls = urlsText.split('\n')
+        .map(url => url.trim())
+        .filter(url => url && url.length > 0);
       
       if (urls.length === 0) {
         showMessage('Veuillez entrer au moins une URL', 'error');
@@ -512,8 +523,27 @@
         urlQueue.push({ url, index });
       });
 
-      // Démarrer le traitement
+      // Désactiver le formulaire pendant le traitement
+      const form = document.getElementById('gofileForm');
+      const submitButton = form.querySelector('button[type="submit"]');
+      const textarea = document.getElementById('gofileUrls');
+      
+      submitButton.disabled = true;
+      textarea.disabled = true;
+      submitButton.textContent = 'Extraction en cours...';
+
+      // Démarrer le traitement de la première URL
       processNextUrl();
+
+      // Surveiller la fin du traitement
+      const checkCompletion = setInterval(() => {
+        if (urlQueue.length === 0 && !isProcessing) {
+          submitButton.disabled = false;
+          textarea.disabled = false;
+          submitButton.textContent = 'Extraire';
+          clearInterval(checkCompletion);
+        }
+      }, 1000);
     });
 
     function showMessage(message, type = 'success') {
@@ -522,7 +552,8 @@
       statusDiv.textContent = message;
       statusDiv.style.display = 'block';
       
-      if (type !== 'info') {
+      // Ne pas faire disparaître les messages de succès d'extraction
+      if (type !== 'success' && !message.includes('Extraction terminée')) {
         setTimeout(() => {
           statusDiv.style.display = 'none';
         }, 5000);
