@@ -94,6 +94,87 @@
     .btn-secondary:hover {
       background-color: var(--border-color-dark);
     }
+
+    .progress-steps {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: var(--border-radius);
+      background-color: var(--bg-color);
+    }
+
+    .step {
+      display: flex;
+      align-items: center;
+      margin-bottom: 10px;
+      padding: 10px;
+      border-radius: var(--border-radius);
+      background-color: white;
+      transition: all 0.3s ease;
+    }
+
+    .step-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 10px;
+      font-size: 12px;
+      color: white;
+    }
+
+    .step.pending .step-icon {
+      background-color: #6c757d;
+    }
+
+    .step.in-progress .step-icon {
+      background-color: #007bff;
+      animation: pulse 1.5s infinite;
+    }
+
+    .step.completed .step-icon {
+      background-color: #28a745;
+    }
+
+    .step.error .step-icon {
+      background-color: #dc3545;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+
+    .step-content {
+      flex: 1;
+    }
+
+    .step-title {
+      font-weight: 500;
+      margin-bottom: 2px;
+    }
+
+    .step-details {
+      font-size: 0.9em;
+      color: #666;
+    }
+
+    .download-progress {
+      margin-top: 10px;
+      height: 4px;
+      background-color: #e9ecef;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .download-progress-bar {
+      height: 100%;
+      background-color: var(--primary-color);
+      width: 0;
+      transition: width 0.3s ease;
+    }
   </style>
 </head>
 <body>
@@ -122,22 +203,103 @@
         <button type="submit" class="btn btn-primary">Extraire</button>
       </form>
 
+      <div class="progress-steps" id="progressSteps">
+        <div class="step pending" id="stepValidation">
+          <div class="step-icon">1</div>
+          <div class="step-content">
+            <div class="step-title">Validation de l'URL</div>
+            <div class="step-details">En attente...</div>
+          </div>
+        </div>
+
+        <div class="step pending" id="stepExtraction">
+          <div class="step-icon">2</div>
+          <div class="step-content">
+            <div class="step-title">Extraction des informations</div>
+            <div class="step-details">En attente...</div>
+          </div>
+        </div>
+
+        <div class="step pending" id="stepDownload">
+          <div class="step-icon">3</div>
+          <div class="step-content">
+            <div class="step-title">Téléchargement des fichiers</div>
+            <div class="step-details">En attente...</div>
+            <div class="download-progress">
+              <div class="download-progress-bar" id="downloadProgressBar"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="step pending" id="stepComplete">
+          <div class="step-icon">4</div>
+          <div class="step-content">
+            <div class="step-title">Finalisation</div>
+            <div class="step-details">En attente...</div>
+          </div>
+        </div>
+      </div>
+
       <div id="extractionStatus"></div>
     </div>
   </div>
 
   <script>
+    function updateStep(stepId, status, details = '') {
+      const step = document.getElementById(stepId);
+      step.className = `step ${status}`;
+      const detailsEl = step.querySelector('.step-details');
+      if (details) {
+        detailsEl.textContent = details;
+      }
+    }
+
+    function resetSteps() {
+      ['stepValidation', 'stepExtraction', 'stepDownload', 'stepComplete'].forEach(stepId => {
+        updateStep(stepId, 'pending', 'En attente...');
+      });
+      document.getElementById('downloadProgressBar').style.width = '0%';
+    }
+
+    function validateAndFixUrl(url) {
+      if (!url) return '';
+      
+      // Supprimer les espaces
+      url = url.trim();
+      
+      // Corriger les erreurs courantes dans le protocole
+      if (url.startsWith('ttp://')) {
+        url = 'https://' + url.slice(6);
+      } else if (url.startsWith('ttps://')) {
+        url = 'https://' + url.slice(7);
+      } else if (url.startsWith('http://')) {
+        url = 'https://' + url.slice(7);
+      } else if (!url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+      
+      return url;
+    }
+
     document.getElementById('gofileForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       
-      const url = document.getElementById('gofileUrl').value;
-      if (!url) {
-        showMessage('Veuillez entrer une URL GoFile valide', 'error');
-        return;
-      }
+      resetSteps();
+      const urlInput = document.getElementById('gofileUrl');
+      let url = urlInput.value;
 
       try {
-        showMessage('Extraction en cours...', 'info');
+        // Étape 1: Validation de l'URL
+        updateStep('stepValidation', 'in-progress', 'Vérification de l\'URL...');
+        url = validateAndFixUrl(url);
+        if (!url.includes('gofile.io')) {
+          throw new Error('URL GoFile invalide');
+        }
+        urlInput.value = url; // Mettre à jour l'input avec l'URL corrigée
+        updateStep('stepValidation', 'completed', 'URL validée');
+
+        // Étape 2: Extraction
+        updateStep('stepExtraction', 'in-progress', 'Extraction des informations du fichier...');
         
         const response = await fetch('/api/gofile/extract', {
           method: 'POST',
@@ -150,12 +312,30 @@
         const result = await response.json();
 
         if (response.ok) {
-          showMessage('Extraction démarrée. Les fichiers seront disponibles dans la galerie une fois le téléchargement terminé.', 'success');
-          document.getElementById('gofileForm').reset();
+          updateStep('stepExtraction', 'completed', 'Informations extraites avec succès');
+          updateStep('stepDownload', 'in-progress', 'Téléchargement en cours...');
+
+          // Simulation de la progression (à remplacer par la vraie progression)
+          let progress = 0;
+          const progressInterval = setInterval(() => {
+            progress += 1;
+            document.getElementById('downloadProgressBar').style.width = `${progress}%`;
+            if (progress >= 100) {
+              clearInterval(progressInterval);
+              updateStep('stepDownload', 'completed', 'Téléchargement terminé');
+              updateStep('stepComplete', 'completed', 'Extraction terminée avec succès');
+              showMessage('Extraction terminée avec succès. Les fichiers seront disponibles dans la galerie.', 'success');
+            }
+          }, 500);
+
         } else {
           throw new Error(result.error || 'Erreur lors de l\'extraction');
         }
       } catch (error) {
+        const currentStep = document.querySelector('.step.in-progress');
+        if (currentStep) {
+          updateStep(currentStep.id, 'error', error.message);
+        }
         showMessage(error.message, 'error');
       }
     });

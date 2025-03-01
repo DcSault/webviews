@@ -37,9 +37,39 @@ function estVideo(extension) {
 }
 
 /**
+ * Valide et corrige une URL GoFile
+ */
+function validateAndFixGofileUrl(url) {
+  if (!url) throw new Error('URL non fournie');
+  
+  // Supprimer les espaces
+  url = url.trim();
+  
+  // Corriger les erreurs courantes dans le protocole
+  if (url.startsWith('ttp://')) {
+    url = 'https://' + url.slice(6);
+  } else if (url.startsWith('ttps://')) {
+    url = 'https://' + url.slice(7);
+  } else if (url.startsWith('http://')) {
+    url = 'https://' + url.slice(7);
+  } else if (!url.startsWith('https://')) {
+    url = 'https://' + url;
+  }
+  
+  // Vérifier que c'est bien une URL GoFile
+  if (!url.includes('gofile.io')) {
+    throw new Error('URL GoFile invalide');
+  }
+  
+  return url;
+}
+
+/**
  * Lance l'extraction en simulant la navigation et déclenche le téléchargement via un clic
  */
 async function lancerExtraction(urlGofile, downloadFolder) {
+  // Valider et corriger l'URL
+  urlGofile = validateAndFixGofileUrl(urlGofile);
   console.log(`Démarrage de l'extraction pour ${urlGofile}`);
 
   // Définir le dossier de téléchargement temporaire
