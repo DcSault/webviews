@@ -139,6 +139,7 @@
       overflow: hidden;
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
       transition: transform 0.3s ease, box-shadow 0.3s ease;
+      position: relative;
     }
 
     .media-wrapper:hover {
@@ -149,8 +150,27 @@
     .media-item {
       width: 100%;
       height: 300px;
-      object-fit: cover;
+      object-fit: contain;
       background-color: #f8f9fa;
+    }
+
+    .media-item.video {
+      width: 100%;
+      height: 300px;
+      object-fit: contain;
+      background-color: #000;
+    }
+
+    .media-info {
+      padding: 10px;
+      background: rgba(255, 255, 255, 0.95);
+      border-top: 1px solid #eee;
+    }
+
+    .media-info p {
+      margin: 5px 0;
+      font-size: 0.9rem;
+      color: #666;
     }
 
     /* Lazy loading animation */
@@ -246,13 +266,24 @@
       rootMargin: '50px'
     });
 
+    // Fonction pour formater la taille du fichier
+    function formatFileSize(bytes) {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
     // Fonction pour charger les médias de manière optimisée
     async function loadMedia() {
       try {
         const response = await fetch('/api/media');
-        const media = await response.json();
+        const mediaData = await response.json();
+        const media = mediaData.data || [];
         
         const container = document.getElementById('mediaContainer');
+        container.innerHTML = ''; // Nettoyer le conteneur
         
         media.forEach(item => {
           const wrapper = document.createElement('div');
@@ -261,27 +292,93 @@
           let mediaElement;
           const mediaPath = `/data/media/${item.type}s/${item.filename}`;
 
-          if (item.type.startsWith('video')) {
+          if (item.type === 'video') {
             mediaElement = document.createElement('video');
+            mediaElement.className = 'media-item video lazy-load';
             mediaElement.controls = true;
             mediaElement.preload = 'none';
-            mediaElement.innerHTML = `<source src="${mediaPath}" type="${item.mimeType}">`;
-          } else if (item.type.startsWith('image')) {
+            mediaElement.playsInline = true;
+            const source = document.createElement('source');
+            source.src = mediaPath;
+            source.type = item.mediaType;
+            mediaElement.appendChild(source);
+          } else if (item.type === 'image') {
             mediaElement = document.createElement('img');
+            mediaElement.className = 'media-item lazy-load';
             mediaElement.src = mediaPath;
+            mediaElement.alt = item.description || item.originalName;
           }
 
           if (mediaElement) {
-            mediaElement.className = 'media-item lazy-load';
             wrapper.appendChild(mediaElement);
+            
+            // Ajouter les informations du média
+            const info = document.createElement('div');
+            info.className = 'media-info';
+            info.innerHTML = `
+              <p><strong>Nom:</strong> ${item.originalName}</p>
+              ${item.description ? `<p><strong>Description:</strong> ${item.description}</p>` : ''}
+              <p><strong>Type:</strong> ${item.type}</p>
+              <p><strong>Taille:</strong> ${formatFileSize(item.size)}</p>
+              ${item.sender ? `<p><strong>Expéditeur:</strong> ${item.sender}</p>` : ''}
+            `;
+            wrapper.appendChild(info);
+            
             container.appendChild(wrapper);
             observer.observe(mediaElement);
           }
         });
+
+        // Activer les filtres
+        setupFilters();
       } catch (error) {
         console.error('Erreur lors du chargement des médias:', error);
       }
     }
+
+    // Configuration des filtres
+    function setupFilters() {
+      const filterButtons = document.querySelectorAll('.filters button');
+      const mediaItems = document.querySelectorAll('.media-wrapper');
+      
+      filterButtons.forEach(button => {
+        button.addEventListener('click', () => {
+          const filterValue = button.getAttribute('data-filter');
+          
+          // Mettre à jour les classes actives
+          filterButtons.forEach(btn => btn.classList.remove('active'));
+          button.classList.add('active');
+          
+          // Filtrer les médias
+          mediaItems.forEach(item => {
+            const mediaType = item.querySelector('video') ? 'video' : 
+                            item.querySelector('img') ? 'image' : 'other';
+            
+            if (filterValue === 'all' || mediaType === filterValue) {
+              item.style.display = '';
+            } else {
+              item.style.display = 'none';
+            }
+          });
+        });
+      });
+    }
+
+    // Configuration de la recherche
+    const searchInput = document.getElementById('searchInput');
+    searchInput.addEventListener('input', (e) => {
+      const searchTerm = e.target.value.toLowerCase();
+      const mediaItems = document.querySelectorAll('.media-wrapper');
+      
+      mediaItems.forEach(item => {
+        const info = item.querySelector('.media-info').textContent.toLowerCase();
+        if (info.includes(searchTerm)) {
+          item.style.display = '';
+        } else {
+          item.style.display = 'none';
+        }
+      });
+    });
 
     // Charger les médias au chargement de la page
     document.addEventListener('DOMContentLoaded', loadMedia);
