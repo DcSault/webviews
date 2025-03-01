@@ -232,6 +232,170 @@
       min-height: 150px;
       font-family: monospace;
     }
+
+    .concurrent-downloads-control {
+      margin-bottom: 15px;
+      padding: 15px;
+      background-color: var(--bg-color);
+      border-radius: var(--border-radius);
+      border: 1px solid var(--border-color);
+    }
+
+    .concurrent-downloads-control label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+
+    .concurrent-downloads-control input {
+      width: 80px;
+      padding: 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      margin-right: 10px;
+    }
+
+    .downloads-summary {
+      margin-top: 10px;
+      font-size: 0.9em;
+      color: var(--text-secondary);
+    }
+
+    .url-item {
+      position: relative;
+      padding: 15px;
+    }
+
+    .url-item .progress-container {
+      margin-top: 10px;
+      background-color: #f8f9fa;
+      border-radius: 4px;
+      padding: 8px;
+    }
+
+    .url-item .progress-bar {
+      height: 6px;
+      background-color: #e9ecef;
+      border-radius: 3px;
+      overflow: hidden;
+      margin: 5px 0;
+    }
+
+    .url-item .progress-bar-inner {
+      height: 100%;
+      background-color: var(--primary-color);
+      transition: width 0.3s ease;
+    }
+
+    .url-item .progress-text {
+      font-size: 0.85em;
+      color: var(--text-secondary);
+    }
+
+    .url-controls {
+      position: absolute;
+      right: 15px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      gap: 8px;
+    }
+
+    .url-controls button {
+      padding: 4px 8px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.85em;
+      color: white;
+    }
+
+    .url-controls .btn-pause {
+      background-color: #ffc107;
+    }
+
+    .url-controls .btn-resume {
+      background-color: #28a745;
+    }
+
+    .url-controls .btn-cancel {
+      background-color: #dc3545;
+    }
+
+    .queue-controls {
+      margin-top: 10px;
+      display: flex;
+      gap: 10px;
+    }
+
+    .url-item.dragging {
+      opacity: 0.5;
+      cursor: move;
+    }
+
+    .url-item .drag-handle {
+      cursor: move;
+      padding: 0 10px;
+      color: #666;
+    }
+
+    .download-history {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: var(--bg-color);
+      border-radius: var(--border-radius);
+    }
+
+    .history-item {
+      display: flex;
+      align-items: center;
+      padding: 10px;
+      margin-bottom: 8px;
+      background-color: white;
+      border-radius: var(--border-radius);
+      border: 1px solid var(--border-color);
+    }
+
+    .history-item .url-info {
+      flex: 1;
+    }
+
+    .history-item .stats {
+      font-size: 0.85em;
+      color: var(--text-secondary);
+      margin-top: 5px;
+    }
+
+    .speed-info {
+      margin-left: 15px;
+      font-size: 0.85em;
+      color: var(--text-secondary);
+    }
+
+    .stats-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-top: 15px;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 15px;
+      border-radius: var(--border-radius);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .stat-card h4 {
+      margin: 0 0 10px 0;
+      color: var(--text-secondary);
+    }
+
+    .stat-value {
+      font-size: 1.5em;
+      font-weight: 500;
+      color: var(--primary-color);
+    }
   </style>
 </head>
 <body>
@@ -251,6 +415,31 @@
   <div class="container">
     <div class="form-container">
       <h2>Extraction GoFile</h2>
+      
+      <div class="concurrent-downloads-control">
+        <label for="maxConcurrent">Nombre de téléchargements simultanés :</label>
+        <input type="number" id="maxConcurrent" min="1" max="10" value="3">
+        <div class="downloads-summary">
+          En cours : <span id="activeCount">0</span> | 
+          En attente : <span id="queueCount">0</span> | 
+          Terminés : <span id="completedCount">0</span>
+        </div>
+        <div class="stats-container">
+          <div class="stat-card">
+            <h4>Vitesse moyenne</h4>
+            <div class="stat-value" id="avgSpeed">0 MB/s</div>
+          </div>
+          <div class="stat-card">
+            <h4>Vitesse actuelle</h4>
+            <div class="stat-value" id="currentSpeed">0 MB/s</div>
+          </div>
+          <div class="stat-card">
+            <h4>Volume total</h4>
+            <div class="stat-value" id="totalVolume">0 MB</div>
+          </div>
+        </div>
+      </div>
+
       <form id="gofileForm" class="upload-form">
         <div class="form-group">
           <label for="gofileUrls">URLs GoFile (une par ligne)</label>
@@ -263,7 +452,17 @@
 
       <div class="url-list" id="urlList" style="margin-top: 20px;">
         <h3>Liste des URLs à traiter</h3>
+        <div class="queue-controls">
+          <button class="btn btn-secondary" onclick="moveSelectedUp()">↑ Monter</button>
+          <button class="btn btn-secondary" onclick="moveSelectedDown()">↓ Descendre</button>
+          <button class="btn btn-secondary" onclick="prioritizeSelected()">Priorité haute</button>
+        </div>
         <div class="url-items" id="urlItems"></div>
+      </div>
+
+      <div class="download-history" id="downloadHistory">
+        <h3>Historique des téléchargements</h3>
+        <div class="history-items" id="historyItems"></div>
       </div>
 
       <div class="progress-steps" id="progressSteps">
@@ -309,6 +508,12 @@
 
   <script>
     let urlQueue = [];
+    let activeDownloads = 0;
+    let completedDownloads = 0;
+    let pausedDownloads = new Set();
+    let downloadHistory = new Map(); // URL -> {timestamp, speed, size}
+    let currentSpeeds = new Map(); // index -> {startTime, bytesLoaded, speed}
+    const MAX_CONCURRENT_DOWNLOADS = 3;
     let isProcessing = false;
 
     function updateStep(stepId, status, details = '') {
@@ -345,15 +550,160 @@
       return url;
     }
 
+    function updateDownloadCounts() {
+      document.getElementById('activeCount').textContent = activeDownloads;
+      document.getElementById('queueCount').textContent = urlQueue.length;
+      document.getElementById('completedCount').textContent = completedDownloads;
+    }
+
+    function formatSpeed(bytesPerSecond) {
+      if (bytesPerSecond === 0) return '0 B/s';
+      const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+      const i = Math.floor(Math.log(bytesPerSecond) / Math.log(1024));
+      return `${(bytesPerSecond / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
+    }
+
+    function updateSpeedStats() {
+      let totalSpeed = 0;
+      let activeCount = 0;
+
+      currentSpeeds.forEach(data => {
+        if (data.speed > 0) {
+          totalSpeed += data.speed;
+          activeCount++;
+        }
+      });
+
+      const avgSpeed = activeCount > 0 ? totalSpeed / activeCount : 0;
+      document.getElementById('currentSpeed').textContent = formatSpeed(totalSpeed);
+      document.getElementById('avgSpeed').textContent = formatSpeed(avgSpeed);
+    }
+
     function createUrlItem(url, index) {
       const div = document.createElement('div');
       div.className = 'url-item';
       div.id = `url-${index}`;
+      div.draggable = true;
       div.innerHTML = `
+        <div class="drag-handle">⋮⋮</div>
         <div class="status pending">●</div>
         <div class="url-text">${url}</div>
+        <div class="progress-container" style="display: none;">
+          <div class="progress-bar">
+            <div class="progress-bar-inner" style="width: 0%"></div>
+          </div>
+          <div class="progress-text">0%</div>
+          <div class="speed-info">0 MB/s</div>
+        </div>
+        <div class="url-controls">
+          <button class="btn-pause" onclick="togglePause(${index})">Pause</button>
+          <button class="btn-cancel" onclick="cancelDownload(${index})">Annuler</button>
+        </div>
       `;
+
+      div.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', index);
+        div.classList.add('dragging');
+      });
+
+      div.addEventListener('dragend', () => {
+        div.classList.remove('dragging');
+      });
+
+      div.addEventListener('dragover', (e) => {
+        e.preventDefault();
+      });
+
+      div.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
+        const toIndex = index;
+        reorderQueue(fromIndex, toIndex);
+      });
+
       return div;
+    }
+
+    function reorderQueue(fromIndex, toIndex) {
+      if (fromIndex === toIndex) return;
+
+      const urlItems = document.getElementById('urlItems');
+      const items = Array.from(urlItems.children);
+      
+      const itemToMove = items[fromIndex];
+      const referenceItem = items[toIndex];
+      
+      if (fromIndex < toIndex) {
+        referenceItem.parentNode.insertBefore(itemToMove, referenceItem.nextSibling);
+      } else {
+        referenceItem.parentNode.insertBefore(itemToMove, referenceItem);
+      }
+
+      const item = urlQueue.find(item => item.index === fromIndex);
+      if (item) {
+        urlQueue = urlQueue.filter(item => item.index !== fromIndex);
+        const insertIndex = urlQueue.findIndex(item => item.index === toIndex);
+        urlQueue.splice(insertIndex, 0, item);
+      }
+    }
+
+    function moveSelectedUp() {
+      const selected = document.querySelector('.url-item.selected');
+      if (selected && selected.previousElementSibling) {
+        const currentIndex = Array.from(selected.parentNode.children).indexOf(selected);
+        reorderQueue(currentIndex, currentIndex - 1);
+      }
+    }
+
+    function moveSelectedDown() {
+      const selected = document.querySelector('.url-item.selected');
+      if (selected && selected.nextElementSibling) {
+        const currentIndex = Array.from(selected.parentNode.children).indexOf(selected);
+        reorderQueue(currentIndex, currentIndex + 1);
+      }
+    }
+
+    function prioritizeSelected() {
+      const selected = document.querySelector('.url-item.selected');
+      if (selected) {
+        const currentIndex = Array.from(selected.parentNode.children).indexOf(selected);
+        reorderQueue(currentIndex, 0);
+      }
+    }
+
+    function addToHistory(url, data) {
+      if (downloadHistory.has(url)) return false;
+
+      downloadHistory.set(url, {
+        timestamp: new Date(),
+        speed: data.speed,
+        size: data.size
+      });
+
+      const historyItems = document.getElementById('historyItems');
+      const div = document.createElement('div');
+      div.className = 'history-item';
+      div.innerHTML = `
+        <div class="url-info">
+          <div>${url}</div>
+          <div class="stats">
+            Vitesse: ${formatSpeed(data.speed)} | 
+            Taille: ${formatSize(data.size)} | 
+            Date: ${new Date().toLocaleString()}
+          </div>
+        </div>
+      `;
+      historyItems.insertBefore(div, historyItems.firstChild);
+
+      if (downloadHistory.size > 50) {
+        const oldestKey = Array.from(downloadHistory.keys())[0];
+        downloadHistory.delete(oldestKey);
+        if (historyItems.children.length > 50) {
+          historyItems.removeChild(historyItems.lastChild);
+        }
+      }
+
+      return true;
     }
 
     function updateUrlStatus(index, status, message = '') {
@@ -367,28 +717,98 @@
       }
     }
 
-    async function processNextUrl() {
-      if (urlQueue.length === 0 || isProcessing) {
-        return;
+    function updateUrlProgress(index, progress, bytesLoaded, totalBytes) {
+      const urlItem = document.getElementById(`url-${index}`);
+      if (!urlItem) return;
+
+      const progressContainer = urlItem.querySelector('.progress-container');
+      const progressBar = urlItem.querySelector('.progress-bar-inner');
+      const progressText = urlItem.querySelector('.progress-text');
+      const speedInfo = urlItem.querySelector('.speed-info');
+      
+      progressContainer.style.display = 'block';
+      progressBar.style.width = `${progress}%`;
+      progressText.textContent = `${progress}%`;
+
+      if (!currentSpeeds.has(index)) {
+        currentSpeeds.set(index, {
+          startTime: Date.now(),
+          bytesLoaded: 0,
+          speed: 0
+        });
       }
 
-      isProcessing = true;
-      const { url, index } = urlQueue[0];
+      const speedData = currentSpeeds.get(index);
+      const elapsed = (Date.now() - speedData.startTime) / 1000;
+      if (elapsed > 0) {
+        const bytesIncrement = bytesLoaded - speedData.bytesLoaded;
+        speedData.speed = bytesIncrement / elapsed;
+        speedData.bytesLoaded = bytesLoaded;
+        speedData.startTime = Date.now();
+        
+        speedInfo.textContent = formatSpeed(speedData.speed);
+        currentSpeeds.set(index, speedData);
+        updateSpeedStats();
+      }
+    }
+
+    function togglePause(index) {
+      const urlItem = document.getElementById(`url-${index}`);
+      const pauseBtn = urlItem.querySelector('.btn-pause');
+      
+      if (pausedDownloads.has(index)) {
+        pausedDownloads.delete(index);
+        pauseBtn.textContent = 'Pause';
+        pauseBtn.className = 'btn-pause';
+        processNextUrl();
+      } else {
+        pausedDownloads.add(index);
+        pauseBtn.textContent = 'Reprendre';
+        pauseBtn.className = 'btn-resume';
+      }
+    }
+
+    function cancelDownload(index) {
+      const urlItem = document.getElementById(`url-${index}`);
+      if (urlItem) {
+        urlItem.remove();
+        
+        if (activeDownloads > 0) {
+          activeDownloads--;
+          processNextUrl();
+        }
+        
+        urlQueue = urlQueue.filter(item => item.index !== index);
+        updateDownloadCounts();
+      }
+    }
+
+    function processNextUrl() {
+      const maxConcurrent = parseInt(document.getElementById('maxConcurrent').value) || 3;
+      
+      while (activeDownloads < maxConcurrent && urlQueue.length > 0) {
+        const nextUrl = urlQueue.find(url => !pausedDownloads.has(url.index));
+        if (!nextUrl) break;
+        
+        urlQueue = urlQueue.filter(item => item !== nextUrl);
+        activeDownloads++;
+        updateDownloadCounts();
+        processUrl(nextUrl);
+      }
+    }
+
+    async function processUrl(urlData) {
+      const { url, index } = urlData;
       updateUrlStatus(index, 'processing');
-      resetSteps();
+      updateDownloadCounts();
 
       try {
-        // Étape 1: Validation de l'URL
-        updateStep('stepValidation', 'in-progress', 'Vérification de l\'URL...');
         const validatedUrl = validateAndFixUrl(url);
         if (!validatedUrl.includes('gofile.io')) {
           throw new Error('URL GoFile invalide');
         }
-        updateStep('stepValidation', 'completed', 'URL validée');
+        updateUrlProgress(index, 25);
 
-        // Étape 2: Extraction
-        updateStep('stepExtraction', 'in-progress', 'Extraction des informations du fichier...');
-        
         const response = await fetch('/api/gofile/extract', {
           method: 'POST',
           headers: {
@@ -397,42 +817,51 @@
           body: JSON.stringify({ url: validatedUrl })
         });
 
+        if (!response.ok) {
+          throw new Error('Erreur lors de l\'extraction');
+        }
+
         const result = await response.json();
+        updateUrlProgress(index, 50);
 
-        if (response.ok) {
-          updateStep('stepExtraction', 'completed', 'Informations extraites avec succès');
-          updateStep('stepDownload', 'in-progress', 'Téléchargement en cours...');
+        const downloadResponse = await fetch('/api/gofile/download', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ url: validatedUrl, fileInfo: result })
+        });
 
-          // Simulation de la progression
-          let progress = 0;
-          const progressInterval = setInterval(() => {
-            progress += 1;
-            document.getElementById('downloadProgressBar').style.width = `${progress}%`;
-            if (progress >= 100) {
-              clearInterval(progressInterval);
-              updateStep('stepDownload', 'completed', 'Téléchargement terminé');
-              updateStep('stepComplete', 'completed', 'Extraction terminée avec succès');
-              updateUrlStatus(index, 'completed', 'Terminé');
-              
-              // Passer à l'URL suivante
-              urlQueue.shift();
-              isProcessing = false;
-              processNextUrl();
-            }
-          }, 500);
-        } else {
-          throw new Error(result.error || 'Erreur lors de l\'extraction');
+        const reader = downloadResponse.body.getReader();
+        const contentLength = +downloadResponse.headers.get('Content-Length');
+        let receivedLength = 0;
+
+        while(true) {
+          const {done, value} = await reader.read();
+          if (done) break;
+          
+          receivedLength += value.length;
+          const progress = (receivedLength / contentLength) * 100;
+          updateUrlProgress(index, progress, receivedLength, contentLength);
         }
+
+        addToHistory(url, {
+          speed: currentSpeeds.get(index)?.speed || 0,
+          size: contentLength
+        });
+
+        updateUrlProgress(index, 100);
+        updateUrlStatus(index, 'completed', 'Terminé');
+        completedDownloads++;
+        updateDownloadCounts();
       } catch (error) {
-        const currentStep = document.querySelector('.step.in-progress');
-        if (currentStep) {
-          updateStep(currentStep.id, 'error', error.message);
-        }
+        console.error('Erreur:', error);
         updateUrlStatus(index, 'error', error.message);
-        
-        // Passer à l'URL suivante même en cas d'erreur
-        urlQueue.shift();
-        isProcessing = false;
+      } finally {
+        activeDownloads--;
+        currentSpeeds.delete(index);
+        updateDownloadCounts();
+        updateSpeedStats();
         processNextUrl();
       }
     }
@@ -448,18 +877,26 @@
         return;
       }
 
-      // Réinitialiser la liste des URLs
       const urlItems = document.getElementById('urlItems');
       urlItems.innerHTML = '';
       urlQueue = [];
+      activeDownloads = 0;
+      completedDownloads = 0;
+      pausedDownloads.clear();
 
-      // Créer la liste des URLs à traiter
       urls.forEach((url, index) => {
         urlItems.appendChild(createUrlItem(url, index));
         urlQueue.push({ url, index });
       });
 
-      // Démarrer le traitement
+      updateDownloadCounts();
+      processNextUrl();
+    });
+
+    document.getElementById('maxConcurrent').addEventListener('change', function() {
+      const value = parseInt(this.value);
+      if (value < 1) this.value = 1;
+      if (value > 10) this.value = 10;
       processNextUrl();
     });
 

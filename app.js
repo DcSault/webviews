@@ -821,6 +821,96 @@ async function findFilePath(fileId) {
   return null;
 }
 
+// Variables globales pour les statistiques
+let downloadStats = {
+  currentSpeed: 0,
+  avgSpeed: 0,
+  totalVolume: 0,
+  downloadCount: 0,
+  speedHistory: [],
+  lastUpdate: Date.now()
+};
+
+// Fonction pour mettre à jour les statistiques
+function updateStats(bytesDownloaded, duration) {
+  const now = Date.now();
+  const speed = bytesDownloaded / duration; // octets par seconde
+
+  downloadStats.currentSpeed = speed;
+  downloadStats.speedHistory.push(speed);
+  
+  // Garder seulement les dernières 24h d'historique (288 points pour 5 minutes)
+  if (downloadStats.speedHistory.length > 288) {
+    downloadStats.speedHistory.shift();
+  }
+  
+  // Calculer la vitesse moyenne
+  downloadStats.avgSpeed = downloadStats.speedHistory.reduce((a, b) => a + b, 0) / downloadStats.speedHistory.length;
+  
+  // Mettre à jour le volume total
+  downloadStats.totalVolume += bytesDownloaded;
+  downloadStats.downloadCount++;
+  downloadStats.lastUpdate = now;
+}
+
+// Route API pour les statistiques
+app.get('/api/stats/downloads', (req, res) => {
+  // Nettoyer les anciennes statistiques (plus de 24h)
+  const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+  if (downloadStats.lastUpdate < oneDayAgo) {
+    downloadStats = {
+      currentSpeed: 0,
+      avgSpeed: 0,
+      totalVolume: downloadStats.totalVolume, // Garder le volume total
+      downloadCount: 0,
+      speedHistory: [],
+      lastUpdate: Date.now()
+    };
+  }
+  
+  res.json(downloadStats);
+});
+
+// Modifier la route de téléchargement pour inclure les statistiques
+app.post('/api/gofile/download', async (req, res) => {
+  try {
+    const { url, fileInfo } = req.body;
+    const startTime = Date.now();
+    let bytesDownloaded = 0;
+
+    const response = await fetch(fileInfo.downloadUrl);
+    const contentLength = parseInt(response.headers.get('content-length'));
+    
+    const reader = response.body.getReader();
+    const chunks = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      
+      chunks.push(value);
+      bytesDownloaded += value.length;
+      
+      // Mettre à jour les statistiques toutes les secondes
+      const duration = (Date.now() - startTime) / 1000;
+      if (duration >= 1) {
+        updateStats(bytesDownloaded, duration);
+      }
+    }
+
+    // Mise à jour finale des statistiques
+    const totalDuration = (Date.now() - startTime) / 1000;
+    updateStats(bytesDownloaded, totalDuration);
+
+    // Envoyer le fichier
+    const blob = new Blob(chunks);
+    res.send(blob);
+  } catch (error) {
+    console.error('Erreur lors du téléchargement:', error);
+    res.status(500).json({ error: 'Erreur lors du téléchargement' });
+  }
+});
+
 // Démarrer le serveur
 app.listen(port, () => {
     console.log(`Serveur démarré sur http://localhost:${port}`);

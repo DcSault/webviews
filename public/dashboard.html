@@ -382,6 +382,83 @@
     .btn-keep:hover, .btn-delete:hover {
       opacity: 0.8;
     }
+
+    .download-stats {
+      grid-column: 1 / -1;
+      background: var(--card-bg);
+      border-radius: var(--border-radius);
+      padding: 20px;
+      margin-top: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .download-stats h3 {
+      margin: 0 0 20px 0;
+      color: var(--text-color);
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 15px;
+      border-radius: var(--border-radius);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .stat-card h4 {
+      margin: 0 0 10px 0;
+      color: var(--text-secondary);
+      font-size: 0.9em;
+    }
+
+    .stat-value {
+      font-size: 1.5em;
+      font-weight: 500;
+      color: var(--primary-color);
+    }
+
+    .stat-card.speed {
+      background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+    }
+
+    .stat-card.volume {
+      background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+    }
+
+    .stat-card.count {
+      background: linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%);
+    }
+
+    .stat-card.speed h4,
+    .stat-card.volume h4,
+    .stat-card.count h4,
+    .stat-card.speed .stat-value,
+    .stat-card.volume .stat-value,
+    .stat-card.count .stat-value {
+      color: white;
+    }
+
+    .stat-trend {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 5px;
+      font-size: 0.85em;
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .stat-trend.up {
+      color: #4CAF50;
+    }
+
+    .stat-trend.down {
+      color: #f44336;
+    }
   </style>
 </head>
 <body>
@@ -499,6 +576,32 @@
           </div>
           <div id="duplicatesList" class="duplicates-container" style="margin-top: 20px;">
             <!-- Les groupes de doublons seront ajoutés ici -->
+          </div>
+        </div>
+      </div>
+
+      <div class="download-stats">
+        <h3>Statistiques de Téléchargement</h3>
+        <div class="stats-grid">
+          <div class="stat-card speed">
+            <h4>Vitesse Actuelle</h4>
+            <div class="stat-value" id="currentSpeed">0 MB/s</div>
+            <div class="stat-trend" id="speedTrend">
+              <span class="trend-icon">↑</span>
+              <span class="trend-value">0%</span>
+            </div>
+          </div>
+          <div class="stat-card speed">
+            <h4>Vitesse Moyenne (24h)</h4>
+            <div class="stat-value" id="avgSpeed">0 MB/s</div>
+          </div>
+          <div class="stat-card volume">
+            <h4>Volume Total Téléchargé</h4>
+            <div class="stat-value" id="totalVolume">0 MB</div>
+          </div>
+          <div class="stat-card count">
+            <h4>Fichiers Téléchargés (24h)</h4>
+            <div class="stat-value" id="downloadCount">0</div>
           </div>
         </div>
       </div>
@@ -854,6 +957,70 @@
         alert('Erreur: ' + error.message);
       }
     }
+
+    // Fonctions pour les statistiques de téléchargement
+    function formatSpeed(bytesPerSecond) {
+      if (bytesPerSecond === 0) return '0 MB/s';
+      const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+      const i = Math.floor(Math.log(bytesPerSecond) / Math.log(1024));
+      return `${(bytesPerSecond / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
+    }
+
+    function formatSize(bytes) {
+      if (bytes === 0) return '0 B';
+      const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(1024));
+      return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
+    }
+
+    let downloadStats = {
+      currentSpeed: 0,
+      avgSpeed: 0,
+      totalVolume: 0,
+      downloadCount: 0,
+      speedHistory: []
+    };
+
+    function updateDownloadStats(stats) {
+      document.getElementById('currentSpeed').textContent = formatSpeed(stats.currentSpeed);
+      document.getElementById('avgSpeed').textContent = formatSpeed(stats.avgSpeed);
+      document.getElementById('totalVolume').textContent = formatSize(stats.totalVolume);
+      document.getElementById('downloadCount').textContent = stats.downloadCount;
+
+      // Mise à jour de la tendance
+      const speedTrend = document.getElementById('speedTrend');
+      const trendIcon = speedTrend.querySelector('.trend-icon');
+      const trendValue = speedTrend.querySelector('.trend-value');
+
+      if (stats.speedHistory.length > 1) {
+        const currentSpeed = stats.speedHistory[stats.speedHistory.length - 1];
+        const previousSpeed = stats.speedHistory[stats.speedHistory.length - 2];
+        const trend = ((currentSpeed - previousSpeed) / previousSpeed) * 100;
+
+        trendIcon.textContent = trend >= 0 ? '↑' : '↓';
+        trendValue.textContent = `${Math.abs(trend).toFixed(1)}%`;
+        speedTrend.className = `stat-trend ${trend >= 0 ? 'up' : 'down'}`;
+      }
+    }
+
+    // Fonction pour récupérer les statistiques du serveur
+    async function fetchDownloadStats() {
+      try {
+        const response = await fetch('/api/stats/downloads');
+        if (response.ok) {
+          const stats = await response.json();
+          updateDownloadStats(stats);
+        }
+      } catch (error) {
+        console.error('Erreur lors de la récupération des statistiques:', error);
+      }
+    }
+
+    // Mettre à jour les statistiques toutes les 5 secondes
+    setInterval(fetchDownloadStats, 5000);
+
+    // Charger les statistiques au chargement de la page
+    document.addEventListener('DOMContentLoaded', fetchDownloadStats);
   </script>
 </body>
 </html> 
