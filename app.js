@@ -8,6 +8,8 @@ const session = require('express-session'); // Pour la gestion des sessions
 const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
 const { lancerExtraction } = require('./gofile_debrid');
+const compression = require('compression');
+const cache = require('memory-cache');
 
 // Configuration de l'application
 const app = express();
@@ -22,6 +24,9 @@ app.use((req, res, next) => {
     res.setTimeout(3600000); // 1 heure
     next();
 });
+
+// Ajouter la compression
+app.use(compression());
 
 // Création des répertoires nécessaires
 const dataDir = path.join(__dirname, 'data');
@@ -199,13 +204,44 @@ async function saveMetadata(metadata) {
     }
 }
 
-// Route pour récupérer tous les médias
-app.get('/api/media', async (req, res) => {
+// Middleware de mise en cache pour les médias
+const cacheMiddleware = (duration) => {
+    return (req, res, next) => {
+        const key = '__express__' + req.originalUrl || req.url;
+        const cachedBody = cache.get(key);
+        
+        if (cachedBody) {
+            res.send(cachedBody);
+            return;
+        } else {
+            res.sendResponse = res.send;
+            res.send = (body) => {
+                cache.put(key, body, duration * 1000);
+                res.sendResponse(body);
+            };
+            next();
+        }
+    };
+};
+
+// Route optimisée pour récupérer les médias
+app.get('/api/media', cacheMiddleware(300), async (req, res) => {
     try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        const skip = (page - 1) * limit;
+        
         const metadata = await getMetadata();
-        res.json(metadata);
-    } catch (err) {
-        console.error('Erreur lors de la récupération des médias :', err);
+        const paginatedData = metadata.slice(skip, skip + limit);
+        
+        res.json({
+            data: paginatedData,
+            total: metadata.length,
+            page,
+            totalPages: Math.ceil(metadata.length / limit)
+        });
+    } catch (error) {
+        console.error('Erreur lors de la récupération des médias:', error);
         res.status(500).json({ error: 'Erreur serveur' });
     }
 });
@@ -344,6 +380,16 @@ app.post('/api/gofile/extract', async (req, res) => {
         console.error('Erreur lors du traitement de la requête Gofile :', err);
         res.status(500).json({ error: 'Erreur lors du traitement de la requête Gofile' });
     }
+});
+
+// Optimisation de la gestion des fichiers statiques
+app.use('/data/media', (req, res, next) => {
+    res.setHeader('Cache-Control', 'public, max-age=31536000');
+    express.static(mediaDir, {
+        maxAge: '1y',
+        etag: true,
+        lastModified: true
+    })(req, res, next);
 });
 
 // Démarrer le serveur

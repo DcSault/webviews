@@ -5,7 +5,195 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gestionnaire de Médias</title>
-  <link rel="stylesheet" href="styles.css">
+  <style>
+    /* Reset et styles de base */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      background-color: #f0f2f5;
+      color: #1a1a1a;
+    }
+
+    /* Header */
+    header {
+      background-color: #ffffff;
+      padding: 1rem 2rem;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+
+    header h1 {
+      margin-bottom: 1rem;
+      color: #1a1a1a;
+    }
+
+    nav {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    nav a, .blur-btn, .logout-btn {
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      color: #666;
+      transition: all 0.3s ease;
+    }
+
+    nav a:hover, .blur-btn:hover, .logout-btn:hover {
+      background-color: #f0f2f5;
+      color: #1a1a1a;
+    }
+
+    nav a.active {
+      background-color: #e4e6eb;
+      color: #1a1a1a;
+    }
+
+    .logout-btn {
+      margin-left: auto;
+      background-color: #dc3545;
+      color: white;
+    }
+
+    .logout-btn:hover {
+      background-color: #c82333;
+      color: white;
+    }
+
+    /* Main content */
+    main {
+      max-width: 1400px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+    }
+
+    /* Search bar */
+    .search-bar {
+      margin-bottom: 2rem;
+    }
+
+    .search-bar input {
+      width: 100%;
+      padding: 0.8rem 1rem;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 1rem;
+      transition: border-color 0.3s ease;
+    }
+
+    .search-bar input:focus {
+      outline: none;
+      border-color: #0066cc;
+      box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.2);
+    }
+
+    /* Filters */
+    .filters {
+      margin-bottom: 2rem;
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .filters button {
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 6px;
+      background-color: #fff;
+      color: #666;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .filters button:hover {
+      background-color: #e4e6eb;
+    }
+
+    .filters button.active {
+      background-color: #0066cc;
+      color: white;
+    }
+
+    /* Media container */
+    .media-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
+      padding: 20px 0;
+    }
+
+    .media-wrapper {
+      background: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .media-wrapper:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .media-item {
+      width: 100%;
+      height: 300px;
+      object-fit: cover;
+      background-color: #f8f9fa;
+    }
+
+    /* Lazy loading animation */
+    .lazy-load {
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
+
+    .lazy-load.loaded {
+      opacity: 1;
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 2rem;
+      background-color: #ffffff;
+      margin-top: 2rem;
+      box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Responsive design */
+    @media (max-width: 768px) {
+      header {
+        padding: 1rem;
+      }
+
+      nav {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .logout-btn {
+        margin-left: 0;
+      }
+
+      .media-container {
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 15px;
+        padding: 15px 0;
+      }
+    }
+  </style>
 </head>
 <body>
   <header>
@@ -31,7 +219,7 @@
       <button data-filter="audio">Audio</button>
     </div>
     
-    <div class="media-grid" id="mediaGrid">
+    <div class="media-container" id="mediaContainer">
       <!-- Les médias seront injectés ici via JavaScript -->
     </div>
   </main>
@@ -40,6 +228,63 @@
     <p>© 2025 - Gestionnaire de Médias</p>
   </footer>
   
-  <script src="app.js"></script>
+  <script>
+    // Intersection Observer pour le chargement différé
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const mediaElement = entry.target;
+          if (mediaElement.tagName === 'VIDEO') {
+            mediaElement.preload = 'metadata';
+          }
+          mediaElement.classList.add('loaded');
+          observer.unobserve(mediaElement);
+        }
+      });
+    }, {
+      threshold: 0.1,
+      rootMargin: '50px'
+    });
+
+    // Fonction pour charger les médias de manière optimisée
+    async function loadMedia() {
+      try {
+        const response = await fetch('/api/media');
+        const media = await response.json();
+        
+        const container = document.getElementById('mediaContainer');
+        
+        media.forEach(item => {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'media-wrapper';
+
+          let mediaElement;
+          const mediaPath = `/data/media/${item.type}s/${item.filename}`;
+
+          if (item.type.startsWith('video')) {
+            mediaElement = document.createElement('video');
+            mediaElement.controls = true;
+            mediaElement.preload = 'none';
+            mediaElement.innerHTML = `<source src="${mediaPath}" type="${item.mimeType}">`;
+          } else if (item.type.startsWith('image')) {
+            mediaElement = document.createElement('img');
+            mediaElement.src = mediaPath;
+          }
+
+          if (mediaElement) {
+            mediaElement.className = 'media-item lazy-load';
+            wrapper.appendChild(mediaElement);
+            container.appendChild(wrapper);
+            observer.observe(mediaElement);
+          }
+        });
+      } catch (error) {
+        console.error('Erreur lors du chargement des médias:', error);
+      }
+    }
+
+    // Charger les médias au chargement de la page
+    document.addEventListener('DOMContentLoaded', loadMedia);
+  </script>
 </body>
 </html>
