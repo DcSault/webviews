@@ -834,23 +834,32 @@ let downloadStats = {
 // Fonction pour mettre à jour les statistiques
 function updateStats(bytesDownloaded, duration) {
   const now = Date.now();
-  const speed = bytesDownloaded / duration; // octets par seconde
-
-  downloadStats.currentSpeed = speed;
-  downloadStats.speedHistory.push(speed);
   
-  // Garder seulement les dernières 24h d'historique (288 points pour 5 minutes)
-  if (downloadStats.speedHistory.length > 288) {
-    downloadStats.speedHistory.shift();
-  }
+  // Calculer la vitesse actuelle
+  const speed = bytesDownloaded / duration; // octets par seconde
+  downloadStats.currentSpeed = speed;
+  
+  // Mettre à jour l'historique des vitesses
+  downloadStats.speedHistory.push({
+    speed,
+    timestamp: now
+  });
+  
+  // Ne garder que les dernières 24h d'historique
+  const oneDayAgo = now - (24 * 60 * 60 * 1000);
+  downloadStats.speedHistory = downloadStats.speedHistory.filter(entry => entry.timestamp > oneDayAgo);
   
   // Calculer la vitesse moyenne
-  downloadStats.avgSpeed = downloadStats.speedHistory.reduce((a, b) => a + b, 0) / downloadStats.speedHistory.length;
+  downloadStats.avgSpeed = downloadStats.speedHistory.reduce((acc, entry) => acc + entry.speed, 0) / downloadStats.speedHistory.length;
   
-  // Mettre à jour le volume total
+  // Mettre à jour le volume total et le compteur
   downloadStats.totalVolume += bytesDownloaded;
   downloadStats.downloadCount++;
   downloadStats.lastUpdate = now;
+
+  // Émettre un événement pour notifier les mises à jour
+  const event = new CustomEvent('downloadStatsUpdated', { detail: downloadStats });
+  window.dispatchEvent(event);
 }
 
 // Route API pour les statistiques
@@ -875,41 +884,79 @@ app.get('/api/stats/downloads', (req, res) => {
 app.post('/api/gofile/download', async (req, res) => {
   try {
     const { url, fileInfo } = req.body;
+    
+    // Validation des paramètres
+    if (!fileInfo || !fileInfo.downloadUrl) {
+      console.error('URL de téléchargement manquante:', { url, fileInfo });
+      return res.status(400).json({ error: 'URL de téléchargement invalide ou manquante' });
+    }
+
+    console.log('Début du téléchargement:', fileInfo.downloadUrl);
     const startTime = Date.now();
     let bytesDownloaded = 0;
 
-    const response = await fetch(fileInfo.downloadUrl);
-    const contentLength = parseInt(response.headers.get('content-length'));
-    
-    const reader = response.body.getReader();
-    const chunks = [];
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      const response = await fetch(fileInfo.downloadUrl);
       
-      chunks.push(value);
-      bytesDownloaded += value.length;
-      
-      // Mettre à jour les statistiques toutes les secondes
-      const duration = (Date.now() - startTime) / 1000;
-      if (duration >= 1) {
-        updateStats(bytesDownloaded, duration);
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status}`);
       }
+
+      const contentLength = parseInt(response.headers.get('content-length') || '0');
+      console.log('Taille du fichier:', formatSize(contentLength));
+      
+      const reader = response.body.getReader();
+      const chunks = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        chunks.push(value);
+        bytesDownloaded += value.length;
+        
+        // Mettre à jour les statistiques toutes les secondes
+        const duration = (Date.now() - startTime) / 1000;
+        if (duration >= 1) {
+          updateStats(bytesDownloaded, duration);
+          console.log('Progression:', Math.round((bytesDownloaded / contentLength) * 100) + '%',
+                     'Vitesse:', formatSpeed(bytesDownloaded / duration));
+        }
+      }
+
+      // Mise à jour finale des statistiques
+      const totalDuration = (Date.now() - startTime) / 1000;
+      updateStats(bytesDownloaded, totalDuration);
+
+      console.log('Téléchargement terminé:', {
+        taille: formatSize(bytesDownloaded),
+        durée: `${totalDuration.toFixed(1)}s`,
+        vitesse: formatSpeed(bytesDownloaded / totalDuration)
+      });
+
+      // Envoyer le fichier
+      const blob = new Blob(chunks);
+      res.send(blob);
+    } catch (fetchError) {
+      console.error('Erreur lors du fetch:', fetchError);
+      throw new Error(`Erreur lors du téléchargement: ${fetchError.message}`);
     }
-
-    // Mise à jour finale des statistiques
-    const totalDuration = (Date.now() - startTime) / 1000;
-    updateStats(bytesDownloaded, totalDuration);
-
-    // Envoyer le fichier
-    const blob = new Blob(chunks);
-    res.send(blob);
   } catch (error) {
     console.error('Erreur lors du téléchargement:', error);
-    res.status(500).json({ error: 'Erreur lors du téléchargement' });
+    res.status(500).json({ 
+      error: 'Erreur lors du téléchargement',
+      details: error.message
+    });
   }
 });
+
+// Fonction pour formater la vitesse
+function formatSpeed(bytesPerSecond) {
+  if (bytesPerSecond === 0) return '0 B/s';
+  const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+  const i = Math.floor(Math.log(bytesPerSecond) / Math.log(1024));
+  return `${(bytesPerSecond / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
+}
 
 // Démarrer le serveur
 app.listen(port, () => {
