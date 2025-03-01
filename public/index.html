@@ -203,6 +203,18 @@
       object-fit: contain;
     }
 
+    /* Style du flou */
+    .media-content video,
+    .media-content img {
+      filter: blur(8px);
+      transition: filter 0.3s ease;
+    }
+
+    .no-blur .media-content video,
+    .no-blur .media-content img {
+      filter: none;
+    }
+
     .media-info {
       padding: 15px;
       background: white;
@@ -236,6 +248,21 @@
 
     .delete-btn:hover {
       background-color: #c82333;
+    }
+
+    .blur-btn {
+      padding: 6px 12px;
+      background-color: #1a73e8;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      margin-right: 10px;
+    }
+
+    .blur-btn:hover {
+      background-color: #1557b0;
     }
 
     /* Lazy loading animation */
@@ -382,12 +409,21 @@
           <p>${item.description || ''}</p>
           <small>Ajouté par: ${item.sender || 'Anonyme'}</small>
           <div class="media-buttons">
+            ${item.type === 'video' || item.type === 'image' ? 
+              `<button onclick="toggleBlur(this)" class="blur-btn">Désactiver le flou</button>` : 
+              ''}
             <button onclick="deleteMedia('${item.id}')" class="delete-btn">Supprimer</button>
           </div>
         </div>
       `;
 
       return div;
+    }
+
+    function toggleBlur(button) {
+      const mediaItem = button.closest('.media-item');
+      mediaItem.classList.toggle('no-blur');
+      button.textContent = mediaItem.classList.contains('no-blur') ? 'Activer le flou' : 'Désactiver le flou';
     }
 
     function updatePagination(page, total) {
