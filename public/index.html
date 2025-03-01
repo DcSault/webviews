@@ -330,6 +330,7 @@
         <option value="other">Autres</option>
       </select>
       <input type="text" id="searchInput" class="form-control" placeholder="Rechercher...">
+      <button id="globalBlurBtn" class="blur-btn">Désactiver le flou global</button>
     </div>
 
     <div id="mediaGrid" class="media-grid"></div>
@@ -409,9 +410,6 @@
           <p>${item.description || ''}</p>
           <small>Ajouté par: ${item.sender || 'Anonyme'}</small>
           <div class="media-buttons">
-            ${item.type === 'video' || item.type === 'image' ? 
-              `<button onclick="toggleBlur(this)" class="blur-btn">Désactiver le flou</button>` : 
-              ''}
             <button onclick="deleteMedia('${item.id}')" class="delete-btn">Supprimer</button>
           </div>
         </div>
@@ -420,10 +418,18 @@
       return div;
     }
 
-    function toggleBlur(button) {
-      const mediaItem = button.closest('.media-item');
-      mediaItem.classList.toggle('no-blur');
-      button.textContent = mediaItem.classList.contains('no-blur') ? 'Activer le flou' : 'Désactiver le flou';
+    function toggleGlobalBlur() {
+      const button = document.getElementById('globalBlurBtn');
+      const mediaGrid = document.getElementById('mediaGrid');
+      const isBlurred = !mediaGrid.classList.contains('no-blur');
+      
+      if (isBlurred) {
+        mediaGrid.classList.add('no-blur');
+        button.textContent = 'Activer le flou global';
+      } else {
+        mediaGrid.classList.remove('no-blur');
+        button.textContent = 'Désactiver le flou global';
+      }
     }
 
     function updatePagination(page, total) {
@@ -482,6 +488,8 @@
         loadMedia(1, document.getElementById('typeFilter').value, e.target.value);
       }, 300);
     });
+
+    document.getElementById('globalBlurBtn').addEventListener('click', toggleGlobalBlur);
 
     // Chargement initial
     loadMedia();
