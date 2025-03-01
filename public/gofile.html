@@ -685,29 +685,33 @@
       const totalVolumeEl = document.getElementById('totalVolume');
       
       let totalSpeed = 0;
-      let activeCount = 0;
       let totalBytes = 0;
+      let activeCount = 0;
       
+      // Calculer la vitesse totale et le volume
       currentSpeeds.forEach(data => {
         if (data.speed > 0) {
           totalSpeed += data.speed;
-          activeCount++;
           totalBytes += data.bytesLoaded;
+          activeCount++;
         }
       });
       
-      const avgSpeed = activeCount > 0 ? totalSpeed / activeCount : 0;
-      
+      // Mettre à jour les éléments d'interface
       currentSpeedEl.textContent = formatSpeed(totalSpeed);
-      avgSpeedEl.textContent = formatSpeed(avgSpeed);
+      avgSpeedEl.textContent = formatSpeed(activeCount > 0 ? totalSpeed / activeCount : 0);
       totalVolumeEl.textContent = formatSize(totalBytes);
-    }
 
-    // Écouter les mises à jour des statistiques
-    window.addEventListener('downloadStatsUpdated', (event) => {
-      const stats = event.detail;
-      updateSpeedStats();
-    });
+      // Émettre un événement pour les mises à jour
+      window.dispatchEvent(new CustomEvent('downloadStatsUpdated', {
+        detail: {
+          currentSpeed: totalSpeed,
+          averageSpeed: activeCount > 0 ? totalSpeed / activeCount : 0,
+          totalVolume: totalBytes,
+          activeDownloads: activeCount
+        }
+      }));
+    }
 
     function createUrlItem(url, index) {
       const div = document.createElement('div');
@@ -802,17 +806,20 @@
     }
 
     function addToHistory(url, data) {
-      if (downloadHistory.has(url)) return false;
-
-      downloadHistory.set(url, {
-        timestamp: new Date(),
-        speed: data.speed,
-        size: data.size
-      });
-
       const historyItems = document.getElementById('historyItems');
       const div = document.createElement('div');
       div.className = 'history-item';
+      
+      // Formater la date
+      const now = new Date();
+      const dateStr = now.toLocaleString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
       div.innerHTML = `
         <div class="url-info">
           <div class="url-text">${url}</div>
@@ -827,19 +834,22 @@
             </span>
             <span class="stat">
               <span class="stat-icon">🕒</span>
-              ${new Date().toLocaleString()}
+              ${dateStr}
             </span>
           </div>
         </div>
       `;
-      historyItems.insertBefore(div, historyItems.firstChild);
+      
+      // Insérer au début de l'historique
+      if (historyItems.firstChild) {
+        historyItems.insertBefore(div, historyItems.firstChild);
+      } else {
+        historyItems.appendChild(div);
+      }
 
-      if (downloadHistory.size > 50) {
-        const oldestKey = Array.from(downloadHistory.keys())[0];
-        downloadHistory.delete(oldestKey);
-        if (historyItems.children.length > 50) {
-          historyItems.removeChild(historyItems.lastChild);
-        }
+      // Limiter le nombre d'éléments dans l'historique
+      while (historyItems.children.length > 50) {
+        historyItems.removeChild(historyItems.lastChild);
       }
 
       return true;
@@ -867,23 +877,27 @@
       
       progressContainer.style.display = 'block';
       progressBar.style.width = `${progress}%`;
-      progressText.textContent = `${progress}%`;
+      progressText.textContent = `${Math.round(progress)}%`;
 
+      // Initialiser ou mettre à jour les données de vitesse
       if (!currentSpeeds.has(index)) {
         currentSpeeds.set(index, {
           startTime: Date.now(),
           bytesLoaded: 0,
-          speed: 0
+          speed: 0,
+          lastUpdate: Date.now()
         });
       }
 
       const speedData = currentSpeeds.get(index);
-      const elapsed = (Date.now() - speedData.startTime) / 1000;
-      if (elapsed > 0) {
+      const now = Date.now();
+      const elapsed = (now - speedData.lastUpdate) / 1000;
+      
+      if (elapsed >= 1) { // Mettre à jour la vitesse chaque seconde
         const bytesIncrement = bytesLoaded - speedData.bytesLoaded;
         speedData.speed = bytesIncrement / elapsed;
         speedData.bytesLoaded = bytesLoaded;
-        speedData.startTime = Date.now();
+        speedData.lastUpdate = now;
         
         speedInfo.textContent = formatSpeed(speedData.speed);
         currentSpeeds.set(index, speedData);
@@ -938,17 +952,19 @@
 
     async function processUrl(urlData) {
       const { url, index } = urlData;
-      updateUrlStatus(index, 'processing');
-      updateDownloadCounts();
-
+      
       try {
+        // Étape 1: Validation
+        updateStep('stepValidation', 'processing', 'Validation en cours...');
         const validatedUrl = validateAndFixUrl(url);
         if (!validatedUrl.includes('gofile.io')) {
           throw new Error('URL GoFile invalide');
         }
+        updateStep('stepValidation', 'completed', 'URL validée');
         updateUrlProgress(index, 25);
 
-        // Première étape : extraction
+        // Étape 2: Extraction
+        updateStep('stepExtraction', 'processing', 'Extraction en cours...');
         console.log('Démarrage de l\'extraction pour', validatedUrl);
         const extractResponse = await fetch('/api/gofile/extract', {
           method: 'POST',
@@ -958,19 +974,23 @@
           body: JSON.stringify({ url: validatedUrl })
         });
 
-        if (!extractResponse.ok) {
-          const error = await extractResponse.json();
-          throw new Error(error.details || 'Erreur lors de l\'extraction');
-        }
-
         const extractResult = await extractResponse.json();
-        if (!extractResult.success || !extractResult.downloadUrl) {
-          throw new Error('Échec de l\'extraction : URL de téléchargement non trouvée');
+        if (!extractResponse.ok || !extractResult.success) {
+          const errorMsg = extractResult.details || 'Erreur lors de l\'extraction';
+          updateStep('stepExtraction', 'error', errorMsg);
+          throw new Error(errorMsg);
         }
 
+        if (!extractResult.downloadUrl) {
+          updateStep('stepExtraction', 'error', 'URL de téléchargement non trouvée');
+          throw new Error('URL de téléchargement non trouvée');
+        }
+
+        updateStep('stepExtraction', 'completed', 'Extraction réussie');
         updateUrlProgress(index, 50);
 
-        // Deuxième étape : téléchargement
+        // Étape 3: Téléchargement
+        updateStep('stepDownload', 'processing', 'Téléchargement en cours...');
         console.log('Démarrage du téléchargement pour', extractResult.downloadUrl);
         const downloadResponse = await fetch('/api/gofile/download', {
           method: 'POST',
@@ -989,6 +1009,7 @@
 
         if (!downloadResponse.ok) {
           const error = await downloadResponse.json();
+          updateStep('stepDownload', 'error', error.details || 'Erreur lors du téléchargement');
           throw new Error(error.details || 'Erreur lors du téléchargement');
         }
 
@@ -1003,7 +1024,12 @@
           receivedLength += value.length;
           const progress = contentLength > 0 ? (receivedLength / contentLength) * 100 : 0;
           updateUrlProgress(index, Math.min(50 + progress/2, 100), receivedLength, contentLength);
+          updateStep('stepDownload', 'processing', `${Math.round(progress)}% téléchargé`);
         }
+
+        // Étape 4: Finalisation
+        updateStep('stepDownload', 'completed', 'Téléchargement terminé');
+        updateStep('stepComplete', 'completed', 'Traitement terminé');
 
         addToHistory(url, {
           speed: currentSpeeds.get(index)?.speed || 0,
@@ -1017,6 +1043,7 @@
       } catch (error) {
         console.error('Erreur:', error);
         updateUrlStatus(index, 'error', error.message);
+        updateStep('stepComplete', 'error', error.message);
       } finally {
         activeDownloads--;
         currentSpeeds.delete(index);
