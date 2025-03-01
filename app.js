@@ -11,6 +11,7 @@ const { lancerExtraction } = require('./gofile_debrid');
 const compression = require('compression');
 const cache = require('memory-cache');
 const crypto = require('crypto');
+const FileType = require('file-type');
 
 // Configuration de l'application
 const app = express();
@@ -542,10 +543,10 @@ function formatSize(bytes) {
 
 // Fonction pour obtenir le type MIME d'un fichier
 async function getFileMimeType(filePath) {
-  const fileType = await import('file-type');
   try {
-    const result = await fileType.fileTypeFromFile(filePath);
-    return result ? result.mime : 'application/octet-stream';
+    const buffer = await fs.promises.readFile(filePath);
+    const fileTypeResult = await FileType.fromBuffer(buffer);
+    return fileTypeResult ? fileTypeResult.mime : 'application/octet-stream';
   } catch (error) {
     console.error('Erreur lors de la détection du type MIME:', error);
     return 'application/octet-stream';
