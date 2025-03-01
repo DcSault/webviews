@@ -446,6 +446,98 @@ app.use('/data/media', (req, res, next) => {
     })(req, res, next);
 });
 
+// Route pour les statistiques du dashboard
+app.get('/api/stats', async (req, res) => {
+  try {
+    // Récupération des fichiers
+    const files = await Media.find();
+    
+    // Statistiques générales
+    const totalFiles = files.length;
+    const totalStorage = files.reduce((acc, file) => acc + file.size, 0);
+    const todayFiles = files.filter(file => {
+      const today = new Date();
+      const fileDate = new Date(file.createdAt);
+      return fileDate.toDateString() === today.toDateString();
+    }).length;
+    
+    // Distribution des types de fichiers
+    const fileTypes = {
+      images: files.filter(f => f.type === 'image').length,
+      videos: files.filter(f => f.type === 'video').length,
+      audio: files.filter(f => f.type === 'audio').length,
+      others: files.filter(f => !['image', 'video', 'audio'].includes(f.type)).length
+    };
+
+    // Activité d'upload sur 30 jours
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const uploadActivity = {
+      dates: [],
+      counts: []
+    };
+
+    for (let i = 0; i < 30; i++) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const count = files.filter(file => {
+        const fileDate = new Date(file.createdAt);
+        return fileDate.toDateString() === date.toDateString();
+      }).length;
+      
+      uploadActivity.dates.unshift(date.toLocaleDateString());
+      uploadActivity.counts.unshift(count);
+    }
+
+    // Historique du stockage
+    const storageHistory = {
+      dates: uploadActivity.dates,
+      values: uploadActivity.counts.map((count, index) => {
+        return files
+          .filter(file => new Date(file.createdAt) <= new Date(thirtyDaysAgo.getTime() + (index * 24 * 60 * 60 * 1000)))
+          .reduce((acc, file) => acc + file.size, 0);
+      })
+    };
+
+    // Activité récente
+    const recentActivity = files
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, 10)
+      .map(file => ({
+        type: 'upload',
+        description: `${file.originalName} (${formatSize(file.size)})`,
+        timestamp: file.createdAt
+      }));
+
+    // Réponse
+    res.json({
+      totalFiles,
+      totalStorage,
+      todayFiles,
+      activeUsers: Math.floor(Math.random() * 10) + 1, // Simulé pour l'exemple
+      storageLimit: 100 * 1024 * 1024 * 1024, // 100 GB
+      fileTypes,
+      uploadActivity,
+      storageHistory,
+      recentActivity
+    });
+
+  } catch (error) {
+    console.error('Erreur lors de la récupération des statistiques:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des statistiques' });
+  }
+});
+
+// Fonction utilitaire pour formater la taille des fichiers
+function formatSize(bytes) {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
 // Démarrer le serveur
 app.listen(port, () => {
     console.log(`Serveur démarré sur http://localhost:${port}`);

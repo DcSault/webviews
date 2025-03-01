@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - Gestionnaire de Médias</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    .dashboard-container {
+      padding: 20px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    .stat-card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .stat-card h3 {
+      margin: 0;
+      color: #666;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #1a73e8;
+      margin: 10px 0;
+    }
+
+    .stat-trend {
+      font-size: 0.9rem;
+      color: #34a853;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .stat-trend.negative {
+      color: #ea4335;
+    }
+
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    .chart-card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .chart-card h3 {
+      margin: 0 0 20px 0;
+      color: #202124;
+    }
+
+    .storage-bar {
+      height: 24px;
+      background: #f1f3f4;
+      border-radius: 12px;
+      overflow: hidden;
+      margin: 20px 0;
+    }
+
+    .storage-used {
+      height: 100%;
+      background: linear-gradient(90deg, #1a73e8, #34a853);
+      width: 0%;
+      transition: width 1s ease-in-out;
+    }
+
+    .storage-info {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.9rem;
+      color: #666;
+    }
+
+    .activity-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .activity-item {
+      display: flex;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid #f1f3f4;
+    }
+
+    .activity-item:last-child {
+      border-bottom: none;
+    }
+
+    .activity-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 20px;
+      background: #f1f3f4;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 15px;
+    }
+
+    .activity-details {
+      flex: 1;
+    }
+
+    .activity-title {
+      font-weight: 500;
+      margin-bottom: 3px;
+    }
+
+    .activity-time {
+      font-size: 0.8rem;
+      color: #666;
+    }
+
+    @media (max-width: 768px) {
+      .charts-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-content">
+      <h1>Gestionnaire de Médias</h1>
+      <div class="nav-links">
+        <a href="/">Accueil</a>
+        <a href="/upload.html">Upload</a>
+        <a href="/gofile.html">GoFile</a>
+        <a href="/dashboard.html" class="active">Dashboard</a>
+        <a href="/logout">Déconnexion</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="dashboard-container">
+    <!-- Statistiques générales -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <h3>Total Fichiers</h3>
+        <div class="stat-value" id="totalFiles">-</div>
+        <div class="stat-trend">
+          <span>↑</span>
+          <span>12% ce mois</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <h3>Espace Utilisé</h3>
+        <div class="stat-value" id="totalStorage">-</div>
+        <div class="stat-trend">
+          <span>↑</span>
+          <span>8% cette semaine</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <h3>Fichiers Aujourd'hui</h3>
+        <div class="stat-value" id="todayFiles">-</div>
+        <div class="stat-trend">
+          <span>↑</span>
+          <span>5 nouveaux</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <h3>Utilisateurs Actifs</h3>
+        <div class="stat-value" id="activeUsers">-</div>
+        <div class="stat-trend negative">
+          <span>↓</span>
+          <span>3% cette semaine</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Graphiques -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <h3>Distribution des Types de Fichiers</h3>
+        <canvas id="fileTypesChart"></canvas>
+      </div>
+
+      <div class="chart-card">
+        <h3>Activité d'Upload (30 derniers jours)</h3>
+        <canvas id="uploadActivityChart"></canvas>
+      </div>
+
+      <div class="chart-card">
+        <h3>Utilisation du Stockage</h3>
+        <div class="storage-bar">
+          <div class="storage-used" id="storageUsedBar"></div>
+        </div>
+        <div class="storage-info">
+          <span id="storageUsed">0 GB</span>
+          <span>Capacité totale: <span id="storageTotal">100 GB</span></span>
+        </div>
+        <canvas id="storageHistoryChart"></canvas>
+      </div>
+
+      <div class="chart-card">
+        <h3>Activité Récente</h3>
+        <ul class="activity-list" id="activityList">
+          <!-- La liste sera remplie dynamiquement -->
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Fonction pour formater la taille des fichiers
+    function formatSize(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // Fonction pour charger les statistiques
+    async function loadStats() {
+      try {
+        const response = await fetch('/api/stats');
+        const stats = await response.json();
+
+        // Mise à jour des statistiques générales
+        document.getElementById('totalFiles').textContent = stats.totalFiles;
+        document.getElementById('totalStorage').textContent = formatSize(stats.totalStorage);
+        document.getElementById('todayFiles').textContent = stats.todayFiles;
+        document.getElementById('activeUsers').textContent = stats.activeUsers;
+
+        // Mise à jour de la barre de stockage
+        const storagePercent = (stats.totalStorage / stats.storageLimit) * 100;
+        document.getElementById('storageUsedBar').style.width = `${storagePercent}%`;
+        document.getElementById('storageUsed').textContent = formatSize(stats.totalStorage);
+        document.getElementById('storageTotal').textContent = formatSize(stats.storageLimit);
+
+        // Graphique des types de fichiers
+        new Chart(document.getElementById('fileTypesChart'), {
+          type: 'doughnut',
+          data: {
+            labels: ['Images', 'Vidéos', 'Audio', 'Autres'],
+            datasets: [{
+              data: [
+                stats.fileTypes.images,
+                stats.fileTypes.videos,
+                stats.fileTypes.audio,
+                stats.fileTypes.others
+              ],
+              backgroundColor: ['#1a73e8', '#34a853', '#fbbc04', '#ea4335']
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: {
+                position: 'bottom'
+              }
+            }
+          }
+        });
+
+        // Graphique d'activité d'upload
+        new Chart(document.getElementById('uploadActivityChart'), {
+          type: 'line',
+          data: {
+            labels: stats.uploadActivity.dates,
+            datasets: [{
+              label: 'Fichiers uploadés',
+              data: stats.uploadActivity.counts,
+              borderColor: '#1a73e8',
+              tension: 0.4
+            }]
+          },
+          options: {
+            responsive: true,
+            scales: {
+              y: {
+                beginAtZero: true
+              }
+            }
+          }
+        });
+
+        // Graphique historique du stockage
+        new Chart(document.getElementById('storageHistoryChart'), {
+          type: 'line',
+          data: {
+            labels: stats.storageHistory.dates,
+            datasets: [{
+              label: 'Stockage utilisé',
+              data: stats.storageHistory.values,
+              borderColor: '#34a853',
+              tension: 0.4,
+              fill: true
+            }]
+          },
+          options: {
+            responsive: true,
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  callback: function(value) {
+                    return formatSize(value);
+                  }
+                }
+              }
+            }
+          }
+        });
+
+        // Mise à jour de la liste d'activité
+        const activityList = document.getElementById('activityList');
+        activityList.innerHTML = stats.recentActivity.map(activity => `
+          <li class="activity-item">
+            <div class="activity-icon">
+              ${activity.type === 'upload' ? '⬆️' : '❌'}
+            </div>
+            <div class="activity-details">
+              <div class="activity-title">${activity.description}</div>
+              <div class="activity-time">${new Date(activity.timestamp).toLocaleString()}</div>
+            </div>
+          </li>
+        `).join('');
+
+      } catch (error) {
+        console.error('Erreur lors du chargement des statistiques:', error);
+      }
+    }
+
+    // Chargement initial
+    loadStats();
+
+    // Rafraîchissement toutes les 5 minutes
+    setInterval(loadStats, 5 * 60 * 1000);
+  </script>
+</body>
+</html> 

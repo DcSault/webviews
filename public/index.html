@@ -52,14 +52,18 @@
       transition: all 0.3s ease;
     }
 
-    nav a:hover, .blur-btn:hover, .logout-btn:hover {
-      background-color: #f0f2f5;
+    nav a {
       color: #1a1a1a;
+      transition: background-color 0.2s;
+    }
+
+    nav a:hover {
+      background-color: #f0f2f5;
     }
 
     nav a.active {
       background-color: #e4e6eb;
-      color: #1a1a1a;
+      font-weight: 500;
     }
 
     .logout-btn {
@@ -315,6 +319,7 @@
         <a href="/" class="active">Accueil</a>
         <a href="/upload.html">Upload</a>
         <a href="/gofile.html">GoFile</a>
+        <a href="/dashboard.html">Dashboard</a>
         <a href="/logout">Déconnexion</a>
       </div>
     </div>
