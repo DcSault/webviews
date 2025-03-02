@@ -23,13 +23,13 @@ const downloadStatsEmitter = new EventEmitter();
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Augmenter les limites globales d'Express
-app.use(express.json({limit: '10240mb'}));
-app.use(express.urlencoded({extended: true, limit: '10240mb'}));
+// Augmenter les limites globales d'Express - sans restriction
+app.use(express.json({limit: '0'})); // 0 signifie pas de limite
+app.use(express.urlencoded({extended: true, limit: '0'})); // 0 signifie pas de limite
 
 // Augmenter le timeout
 app.use((req, res, next) => {
-    res.setTimeout(3600000); // 1 heure
+    res.setTimeout(0); // 0 signifie pas de limite de timeout
     next();
 });
 
@@ -179,8 +179,7 @@ const storage = multer.diskStorage({
 const upload = multer({
     storage: storage,
     limits: {
-        fileSize: 10 * 1024 * 1024 * 1024, // 10GB limite de taille
-        files: 100 // Nombre maximum de fichiers
+        // Supprimer les limites de taille et de nombre de fichiers
     },
     fileFilter: function (req, file, cb) {
         // Accepter tous les types de fichiers
@@ -303,7 +302,7 @@ app.get('/api/media', cacheMiddleware(300), async (req, res) => {
 });
 
 // Route pour l'upload de médias
-app.post('/api/upload', upload.array('files', 100), async (req, res) => {
+app.post('/api/upload', upload.array('files'), async (req, res) => {
     try {
         const files = req.files;
         const { sender, description } = req.body;
@@ -720,7 +719,7 @@ app.get('/api/stats', async (req, res) => {
       totalStorage,
       todayFiles,
       activeUsers: Math.floor(Math.random() * 10) + 1, // Simulé pour l'exemple
-      storageLimit: 100 * 1024 * 1024 * 1024, // 100 GB
+      storageLimit: Number.MAX_SAFE_INTEGER, // Pratiquement sans limite
       fileTypes,
       uploadActivity,
       storageHistory,

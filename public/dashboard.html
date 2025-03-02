@@ -534,7 +534,7 @@
         </div>
         <div class="storage-info">
           <span id="storageUsed">0 GB</span>
-          <span>Capacité totale: <span id="storageTotal">100 GB</span></span>
+          <span>Capacité totale: <span id="storageTotal">Illimitée</span></span>
         </div>
         <canvas id="storageHistoryChart"></canvas>
       </div>
@@ -631,10 +631,9 @@
         document.getElementById('activeUsers').textContent = stats.activeUsers;
 
         // Mise à jour de la barre de stockage
-        const storagePercent = (stats.totalStorage / stats.storageLimit) * 100;
-        document.getElementById('storageUsedBar').style.width = `${storagePercent}%`;
+        document.getElementById('storageUsedBar').style.width = `1%`;
         document.getElementById('storageUsed').textContent = formatSize(stats.totalStorage);
-        document.getElementById('storageTotal').textContent = formatSize(stats.storageLimit);
+        document.getElementById('storageTotal').textContent = 'Illimitée';
 
         // Graphique des types de fichiers
         new Chart(document.getElementById('fileTypesChart'), {

@@ -351,8 +351,8 @@
           </ul>
         <h4>Limites :</h4>
         <ul>
-          <li>Taille maximale par fichier : 100 MB</li>
-          <li>Nombre maximum de fichiers simultanés : 10</li>
+          <li>Aucune limite de taille par fichier</li>
+          <li>Aucune limite de nombre de fichiers simultanés</li>
               </ul>
       </div>
     </div>
@@ -409,17 +409,7 @@
 
     // Gestion des fichiers
     function handleFiles(files) {
-      if (selectedFiles.size + files.length > 10) {
-        showMessage('Maximum 10 fichiers simultanés', 'error');
-        return;
-      }
-
       Array.from(files).forEach(file => {
-        if (file.size > 100 * 1024 * 1024) {
-          showMessage(`${file.name} dépasse la limite de 100 MB`, 'error');
-          return;
-        }
-
         const id = Math.random().toString(36).substring(7);
         selectedFiles.set(id, file);
         createPreview(file, id);
