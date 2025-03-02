@@ -24,8 +24,8 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Augmenter les limites globales d'Express - sans restriction
-app.use(express.json({limit: '0'})); // 0 signifie pas de limite
-app.use(express.urlencoded({extended: true, limit: '0'})); // 0 signifie pas de limite
+app.use(express.json({limit: '1gb'})); // Limite très élevée
+app.use(express.urlencoded({extended: true, limit: '1gb'})); // Limite très élevée
 
 // Augmenter le timeout
 app.use((req, res, next) => {
@@ -82,8 +82,8 @@ const accessLogStream = fs.createWriteStream(
 );
 
 // Middleware pour analyser les requêtes
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(morgan('combined', { stream: accessLogStream }));
 
 // Configuration de la session
@@ -719,7 +719,7 @@ app.get('/api/stats', async (req, res) => {
       totalStorage,
       todayFiles,
       activeUsers: Math.floor(Math.random() * 10) + 1, // Simulé pour l'exemple
-      storageLimit: Number.MAX_SAFE_INTEGER, // Pratiquement sans limite
+      storageLimit: 100 * 1024, // 100 Go en Mo
       fileTypes,
       uploadActivity,
       storageHistory,
