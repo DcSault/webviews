@@ -279,7 +279,7 @@ app.get('/api/media', cacheMiddleware(300), async (req, res) => {
                     ...item,
                     filePath: `/data/media/${item.type}s/${item.filename}`
                 };
-            } catch (err) {
+    } catch (err) {
                 console.warn(`✗ Fichier non trouvé: ${filePath}`);
                 return null;
             }
@@ -391,6 +391,26 @@ app.delete('/api/media/:id', async (req, res) => {
     }
 });
 
+// Variables globales pour les statistiques
+let downloadStats = {
+  totalVolume: 0,
+  downloadCount: 0,
+  lastUpdate: Date.now()
+};
+
+// Fonction pour mettre à jour les statistiques
+function updateStats(bytesDownloaded, duration) {
+  const now = Date.now();
+  
+  // Mettre à jour le volume total et le compteur
+  downloadStats.totalVolume += bytesDownloaded;
+  downloadStats.downloadCount++;
+  downloadStats.lastUpdate = now;
+
+  // Émettre un événement Node.js
+  downloadStatsEmitter.emit('statsUpdated', downloadStats);
+}
+
 // Route pour l'extraction Gofile
 app.post('/api/gofile/extract', async (req, res) => {
     try {
@@ -398,8 +418,6 @@ app.post('/api/gofile/extract', async (req, res) => {
         if (!url) {
             return res.status(400).json({ error: 'URL Gofile requise' });
         }
-
-        console.log('Démarrage de l\'extraction pour', url);
 
         // Lancer l'extraction et attendre le résultat
         const downloadFolder = path.join(mediaDir, 'gofile_downloads');
@@ -980,57 +998,14 @@ async function findFilePath(fileId) {
   return null;
 }
 
-// Variables globales pour les statistiques
-let downloadStats = {
-  currentSpeed: 0,
-  avgSpeed: 0,
-  totalVolume: 0,
-  downloadCount: 0,
-  speedHistory: [],
-  lastUpdate: Date.now()
-};
-
-// Fonction pour mettre à jour les statistiques
-function updateStats(bytesDownloaded, duration) {
-  const now = Date.now();
-  
-  // Calculer la vitesse actuelle
-  const speed = bytesDownloaded / duration; // octets par seconde
-  downloadStats.currentSpeed = speed;
-  
-  // Mettre à jour l'historique des vitesses
-  downloadStats.speedHistory.push({
-    speed,
-    timestamp: now
-  });
-  
-  // Ne garder que les dernières 24h d'historique
-  const oneDayAgo = now - (24 * 60 * 60 * 1000);
-  downloadStats.speedHistory = downloadStats.speedHistory.filter(entry => entry.timestamp > oneDayAgo);
-  
-  // Calculer la vitesse moyenne
-  downloadStats.avgSpeed = downloadStats.speedHistory.reduce((acc, entry) => acc + entry.speed, 0) / downloadStats.speedHistory.length;
-  
-  // Mettre à jour le volume total et le compteur
-  downloadStats.totalVolume += bytesDownloaded;
-  downloadStats.downloadCount++;
-  downloadStats.lastUpdate = now;
-
-  // Émettre un événement Node.js au lieu d'utiliser CustomEvent
-  downloadStatsEmitter.emit('statsUpdated', downloadStats);
-}
-
 // Route API pour les statistiques
 app.get('/api/stats/downloads', (req, res) => {
   // Nettoyer les anciennes statistiques (plus de 24h)
   const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
   if (downloadStats.lastUpdate < oneDayAgo) {
     downloadStats = {
-      currentSpeed: 0,
-      avgSpeed: 0,
       totalVolume: downloadStats.totalVolume, // Garder le volume total
       downloadCount: 0,
-      speedHistory: [],
       lastUpdate: Date.now()
     };
   }

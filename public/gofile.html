@@ -518,14 +518,6 @@
         </div>
         <div class="stats-container">
           <div class="stat-card">
-            <h4>Vitesse moyenne</h4>
-            <div class="stat-value" id="avgSpeed">0 MB/s</div>
-          </div>
-          <div class="stat-card">
-            <h4>Vitesse actuelle</h4>
-            <div class="stat-value" id="currentSpeed">0 MB/s</div>
-          </div>
-          <div class="stat-card">
             <h4>Volume total</h4>
             <div class="stat-value" id="totalVolume">0 MB</div>
           </div>
@@ -540,7 +532,7 @@
                    rows="10" required></textarea>
         </div>
         <button type="submit" class="btn btn-primary">Extraire</button>
-      </form>
+        </form>
 
       <div class="url-list" id="urlList" style="margin-top: 20px;">
         <h3>Liste des URLs à traiter</h3>
@@ -603,8 +595,7 @@
     let activeDownloads = 0;
     let completedDownloads = 0;
     let pausedDownloads = new Set();
-    let downloadHistory = new Map(); // URL -> {timestamp, speed, size}
-    let currentSpeeds = new Map(); // index -> {startTime, bytesLoaded, speed}
+    let downloadHistory = new Map(); // URL -> {timestamp, size}
     const MAX_CONCURRENT_DOWNLOADS = 3;
     let isProcessing = false;
 
@@ -665,52 +656,11 @@
       document.getElementById('completedCount').textContent = completedDownloads;
     }
 
-    function formatSpeed(bytesPerSecond) {
-      if (bytesPerSecond === 0) return '0 B/s';
-      const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
-      const i = Math.floor(Math.log(bytesPerSecond) / Math.log(1024));
-      return `${(bytesPerSecond / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
-    }
-
     function formatSize(bytes) {
       if (bytes === 0) return '0 B';
       const units = ['B', 'KB', 'MB', 'GB'];
       const i = Math.floor(Math.log(bytes) / Math.log(1024));
       return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
-    }
-
-    function updateSpeedStats() {
-      const currentSpeedEl = document.getElementById('currentSpeed');
-      const avgSpeedEl = document.getElementById('avgSpeed');
-      const totalVolumeEl = document.getElementById('totalVolume');
-      
-      let totalSpeed = 0;
-      let totalBytes = 0;
-      let activeCount = 0;
-      
-      // Calculer la vitesse totale et le volume
-      currentSpeeds.forEach(data => {
-        if (data.speed > 0) {
-          totalSpeed += data.speed;
-          totalBytes += data.bytesLoaded;
-          activeCount++;
-        }
-      });
-      
-      // Mettre à jour les éléments d'interface
-      currentSpeedEl.textContent = formatSpeed(totalSpeed);
-      avgSpeedEl.textContent = formatSpeed(activeCount > 0 ? totalSpeed / activeCount : 0);
-      totalVolumeEl.textContent = formatSize(totalBytes);
-
-      // Émettre un événement pour les mises à jour
-      window.dispatchEvent(new CustomEvent('downloadStatsUpdated', {
-        detail: {
-          currentSpeed: totalSpeed,
-          averageSpeed: activeCount > 0 ? totalSpeed / activeCount : 0,
-          totalVolume: totalBytes,
-          activeDownloads: activeCount
-        }
-      }));
     }
 
     function createUrlItem(url, index) {
@@ -727,7 +677,6 @@
             <div class="progress-bar-inner" style="width: 0%"></div>
           </div>
           <div class="progress-text">0%</div>
-          <div class="speed-info">0 MB/s</div>
         </div>
         <div class="url-controls">
           <button class="btn-pause" onclick="togglePause(${index})">Pause</button>
@@ -749,7 +698,7 @@
       });
 
       div.addEventListener('drop', (e) => {
-        e.preventDefault();
+      e.preventDefault();
         const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
         const toIndex = index;
         reorderQueue(fromIndex, toIndex);
@@ -825,10 +774,6 @@
           <div class="url-text">${url}</div>
           <div class="stats">
             <span class="stat">
-              <span class="stat-icon">⚡</span>
-              ${formatSpeed(data.speed)}
-            </span>
-            <span class="stat">
               <span class="stat-icon">📦</span>
               ${formatSize(data.size)}
             </span>
@@ -873,36 +818,10 @@
       const progressContainer = urlItem.querySelector('.progress-container');
       const progressBar = urlItem.querySelector('.progress-bar-inner');
       const progressText = urlItem.querySelector('.progress-text');
-      const speedInfo = urlItem.querySelector('.speed-info');
       
       progressContainer.style.display = 'block';
       progressBar.style.width = `${progress}%`;
       progressText.textContent = `${Math.round(progress)}%`;
-
-      // Initialiser ou mettre à jour les données de vitesse
-      if (!currentSpeeds.has(index)) {
-        currentSpeeds.set(index, {
-          startTime: Date.now(),
-          bytesLoaded: 0,
-          speed: 0,
-          lastUpdate: Date.now()
-        });
-      }
-
-      const speedData = currentSpeeds.get(index);
-      const now = Date.now();
-      const elapsed = (now - speedData.lastUpdate) / 1000;
-      
-      if (elapsed >= 1) { // Mettre à jour la vitesse chaque seconde
-        const bytesIncrement = bytesLoaded - speedData.bytesLoaded;
-        speedData.speed = bytesIncrement / elapsed;
-        speedData.bytesLoaded = bytesLoaded;
-        speedData.lastUpdate = now;
-        
-        speedInfo.textContent = formatSpeed(speedData.speed);
-        currentSpeeds.set(index, speedData);
-        updateSpeedStats();
-      }
     }
 
     function togglePause(index) {
@@ -966,18 +885,16 @@
 
         // Étape 2: Extraction
         updateStep('stepExtraction', 'processing', 'Extraction en cours...');
-        console.log('Démarrage de l\'extraction pour', validatedUrl);
         
         // Extraire l'ID du contenu de l'URL
         const contentId = validatedUrl.split('/d/')[1];
-        console.log('ID du contenu GoFile:', contentId);
         
         let extractResponse;
         try {
           extractResponse = await fetch('/api/gofile/extract', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
               'Accept': 'application/json'
             },
             body: JSON.stringify({ 
@@ -1025,7 +942,6 @@
 
         // Étape 3: Téléchargement
         updateStep('stepDownload', 'processing', 'Téléchargement en cours...');
-        console.log('Démarrage du téléchargement:', extractResult.data);
 
         let downloadResponse;
         try {
@@ -1088,12 +1004,9 @@
           const timeDiff = (now - lastUpdate) / 1000; // en secondes
           
           if (timeDiff >= 1) {
-            const bytesDiff = receivedLength - lastBytes;
-            const speed = bytesDiff / timeDiff;
-            
             const progress = contentLength ? (receivedLength / contentLength) * 100 : 0;
             updateUrlProgress(index, Math.min(50 + progress/2, 100), receivedLength, contentLength);
-            updateStep('stepDownload', 'processing', `${Math.round(progress)}% - ${formatSpeed(speed)}`);
+            updateStep('stepDownload', 'processing', `${Math.round(progress)}%`);
             
             lastUpdate = now;
             lastBytes = receivedLength;
@@ -1104,9 +1017,7 @@
         updateStep('stepDownload', 'completed', 'Téléchargement terminé');
         updateStep('stepComplete', 'completed', 'Traitement terminé');
 
-        const finalSpeed = (receivedLength / ((Date.now() - lastUpdate) / 1000)) || 0;
         addToHistory(url, {
-          speed: finalSpeed,
           size: contentLength
         });
 
@@ -1128,9 +1039,7 @@
         }
       } finally {
         activeDownloads--;
-        currentSpeeds.delete(index);
         updateDownloadCounts();
-        updateSpeedStats();
         controller = null;
         processNextUrl();
       }
