@@ -15,7 +15,19 @@ async function attendre(ms) {
  * Nettoyer le nom du fichier en remplaçant les caractères spéciaux
  */
 function sanitizeFilename(filename) {
-  return filename.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+  // Conserver l'extension
+  const extension = path.extname(filename);
+  const nameWithoutExt = path.basename(filename, extension);
+  
+  // Remplacer les caractères non-ASCII et les caractères spéciaux par des underscores
+  const sanitizedName = nameWithoutExt
+    .replace(/[^\x00-\x7F]/g, '_') // Remplacer les caractères non-ASCII
+    .replace(/[<>:"/\\|?*]/g, '_') // Remplacer les caractères spéciaux Windows
+    .replace(/\s+/g, '_')          // Remplacer les espaces par des underscores
+    .replace(/__+/g, '_')          // Éviter les underscores multiples
+    .trim();
+  
+  return sanitizedName + extension;
 }
 
 /**
@@ -225,6 +237,8 @@ async function moveAndSortDownloads(downloadFolder) {
       let type = 'other';
       let destinationDir = null;
       let newFilename = `${uuidv4()}${ext}`;
+      // Sanitize le nom de fichier original pour les métadonnées
+      const sanitizedOriginalName = sanitizeFilename(file);
 
       if (estImage(ext)) {
         type = 'image';
@@ -249,8 +263,8 @@ async function moveAndSortDownloads(downloadFolder) {
             id: uuidv4(),
             type,
             sender: 'Gofile',
-            description: `Importé depuis ${file}`,
-            originalName: file,
+            description: `Importé depuis ${sanitizedOriginalName}`,
+            originalName: sanitizedOriginalName,
             filename: newFilename,
             filePath: `data/media/${type === 'image' ? 'images' : 'videos'}/${newFilename}`,
             mediaType: type === 'image' ? 'image/jpeg' : 'video/mp4',

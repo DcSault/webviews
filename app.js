@@ -503,7 +503,19 @@ app.post('/api/gofile/download', async (req, res) => {
             // Configurer les en-têtes de la réponse
             res.setHeader('Content-Length', contentLength);
             res.setHeader('Content-Type', 'application/octet-stream');
-            res.setHeader('Content-Disposition', `attachment; filename="${fileInfo.fileName || 'download'}"`);
+            
+            // Encoder le nom de fichier pour éviter les caractères non valides
+            let safeFileName = '';
+            if (fileInfo.fileName) {
+                // Encoder le nom de fichier en URI pour éviter les caractères spéciaux
+                safeFileName = encodeURIComponent(fileInfo.fileName)
+                    .replace(/['()]/g, escape) // Échapper les parenthèses et apostrophes
+                    .replace(/\*/g, '%2A'); // Échapper les astérisques
+            } else {
+                safeFileName = 'download';
+            }
+            
+            res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
             
             // Streaming du fichier
             const fileStream = fs.createReadStream(filePath);
@@ -557,7 +569,19 @@ app.post('/api/gofile/download', async (req, res) => {
                 // Configurer les en-têtes de la réponse
                 res.setHeader('Content-Length', contentLength || 0);
                 res.setHeader('Content-Type', response.headers.get('content-type') || 'application/octet-stream');
-                res.setHeader('Content-Disposition', `attachment; filename="${fileInfo.fileName || 'download'}"`);
+                
+                // Encoder le nom de fichier pour éviter les caractères non valides
+                let safeFileName = '';
+                if (fileInfo.fileName) {
+                    // Encoder le nom de fichier en URI pour éviter les caractères spéciaux
+                    safeFileName = encodeURIComponent(fileInfo.fileName)
+                        .replace(/['()]/g, escape) // Échapper les parenthèses et apostrophes
+                        .replace(/\*/g, '%2A'); // Échapper les astérisques
+                } else {
+                    safeFileName = 'download';
+                }
+                
+                res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
                 
                 // Streaming du fichier
                 response.body.pipe(res);
