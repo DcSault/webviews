@@ -972,27 +972,47 @@
         const contentId = validatedUrl.split('/d/')[1];
         console.log('ID du contenu GoFile:', contentId);
         
-        const extractResponse = await fetch('/api/gofile/extract', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          body: JSON.stringify({ 
-            url: validatedUrl,
-            contentId: contentId
-          }),
-          signal: controller.signal
-        });
+        let extractResponse;
+        try {
+          extractResponse = await fetch('/api/gofile/extract', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            body: JSON.stringify({ 
+              url: validatedUrl,
+              contentId: contentId
+            }),
+            signal: controller.signal
+          });
+        } catch (fetchError) {
+          console.error('Erreur lors de la requête d\'extraction:', fetchError);
+          updateStep('stepExtraction', 'error', `Erreur réseau: ${fetchError.message}`);
+          throw new Error(`Erreur réseau lors de l'extraction: ${fetchError.message}`);
+        }
 
         if (!extractResponse.ok) {
-          const errorData = await extractResponse.json();
+          let errorData;
+          try {
+            errorData = await extractResponse.json();
+          } catch (e) {
+            errorData = { error: `Erreur HTTP: ${extractResponse.status}`, message: extractResponse.statusText };
+          }
           console.error('Erreur extraction:', errorData);
           updateStep('stepExtraction', 'error', `Erreur lors de l'extraction: ${errorData.error || errorData.message || 'Erreur inconnue'}`);
           throw new Error(`Erreur lors de l'extraction Gofile: ${errorData.error || errorData.message || 'Erreur inconnue'}`);
         }
 
-        const extractResult = await extractResponse.json();
+        let extractResult;
+        try {
+          extractResult = await extractResponse.json();
+        } catch (jsonError) {
+          console.error('Erreur lors du parsing de la réponse JSON:', jsonError);
+          updateStep('stepExtraction', 'error', 'Format de réponse invalide');
+          throw new Error('Format de réponse invalide lors de l\'extraction');
+        }
+        
         console.log('Résultat extraction:', extractResult);
 
         if (!extractResult.success || !extractResult.data || !extractResult.data.downloadUrl) {
@@ -1007,21 +1027,38 @@
         updateStep('stepDownload', 'processing', 'Téléchargement en cours...');
         console.log('Démarrage du téléchargement:', extractResult.data);
 
-        const downloadResponse = await fetch('/api/gofile/download', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            fileInfo: extractResult.data
-          }),
-          signal: controller.signal
-        });
+        let downloadResponse;
+        try {
+          downloadResponse = await fetch('/api/gofile/download', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              fileInfo: extractResult.data
+            }),
+            signal: controller.signal
+          });
+        } catch (fetchError) {
+          console.error('Erreur lors de la requête de téléchargement:', fetchError);
+          updateStep('stepDownload', 'error', `Erreur réseau: ${fetchError.message}`);
+          throw new Error(`Erreur réseau lors du téléchargement: ${fetchError.message}`);
+        }
 
         if (!downloadResponse.ok) {
-          const error = await downloadResponse.json();
+          let error;
+          try {
+            error = await downloadResponse.json();
+          } catch (e) {
+            error = { error: `Erreur HTTP: ${downloadResponse.status}`, message: downloadResponse.statusText };
+          }
           updateStep('stepDownload', 'error', `Erreur: ${error.message || error.error || 'Erreur lors du téléchargement'}`);
           throw new Error(error.message || error.error || 'Erreur lors du téléchargement');
+        }
+
+        if (!downloadResponse.body) {
+          updateStep('stepDownload', 'error', 'Réponse de téléchargement invalide');
+          throw new Error('Réponse de téléchargement invalide');
         }
 
         const reader = downloadResponse.body.getReader();
@@ -1031,7 +1068,16 @@
         let lastBytes = 0;
 
         while (true) {
-          const { done, value } = await reader.read();
+          let readResult;
+          try {
+            readResult = await reader.read();
+          } catch (readError) {
+            console.error('Erreur lors de la lecture du stream:', readError);
+            updateStep('stepDownload', 'error', `Erreur de lecture: ${readError.message}`);
+            throw new Error(`Erreur lors de la lecture du stream: ${readError.message}`);
+          }
+          
+          const { done, value } = readResult;
           
           if (done) {
             break;
