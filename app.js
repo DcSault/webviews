@@ -388,7 +388,7 @@ app.delete('/api/media/:id', async (req, res) => {
 // Route pour l'extraction Gofile
 app.post('/api/gofile/extract', async (req, res) => {
     try {
-        const { url } = req.body;
+        const { url, contentId } = req.body;
         if (!url) {
             return res.status(400).json({ error: 'URL Gofile requise' });
         }
@@ -397,24 +397,47 @@ app.post('/api/gofile/extract', async (req, res) => {
 
         // Lancer l'extraction et attendre le résultat
         const downloadFolder = path.join(mediaDir, 'gofile_downloads');
-        const fileInfo = await lancerExtraction(url, downloadFolder);
-
-        if (!fileInfo || !fileInfo.downloadUrl) {
-            throw new Error('Impossible d\'obtenir l\'URL de téléchargement');
+        
+        try {
+            const files = await lancerExtraction(url, downloadFolder);
+            
+            if (!files || files.length === 0) {
+                console.error('Aucun fichier extrait de GoFile');
+                return res.status(404).json({
+                    success: false,
+                    error: 'Impossible d\'obtenir l\'URL de téléchargement',
+                    message: 'Aucun fichier trouvé dans le contenu GoFile'
+                });
+            }
+            
+            // Prendre le premier fichier extrait
+            const fileInfo = files[0];
+            
+            // Construire l'URL de téléchargement pour le fichier
+            const downloadUrl = `/data/media/${fileInfo.type === 'image' ? 'images' : 'videos'}/${fileInfo.filename}`;
+            
+            res.status(200).json({
+                success: true,
+                data: {
+                    downloadUrl: downloadUrl,
+                    fileName: fileInfo.originalName,
+                    fileSize: fileInfo.size
+                }
+            });
+        } catch (extractionError) {
+            console.error('Erreur lors de l\'extraction GoFile:', extractionError);
+            res.status(500).json({ 
+                success: false,
+                error: 'Impossible d\'obtenir l\'URL de téléchargement',
+                message: extractionError.message 
+            });
         }
-
-        res.status(200).json({
-            success: true,
-            downloadUrl: fileInfo.downloadUrl,
-            fileName: fileInfo.fileName,
-            fileSize: fileInfo.fileSize
-        });
-
     } catch (err) {
         console.error('Erreur lors de l\'extraction Gofile:', err);
         res.status(500).json({ 
+            success: false,
             error: 'Erreur lors de l\'extraction',
-            details: err.message 
+            message: err.message 
         });
     }
 });
@@ -422,57 +445,108 @@ app.post('/api/gofile/extract', async (req, res) => {
 // Route pour le téléchargement
 app.post('/api/gofile/download', async (req, res) => {
     try {
-        const { url, fileInfo } = req.body;
+        const { fileInfo } = req.body;
         
         if (!fileInfo || !fileInfo.downloadUrl) {
-            console.error('Données de téléchargement invalides:', { url, fileInfo });
+            console.error('Données de téléchargement invalides:', fileInfo);
             return res.status(400).json({ 
+                success: false,
                 error: 'Données de téléchargement invalides',
-                details: 'URL de téléchargement manquante'
+                message: 'URL de téléchargement manquante'
             });
         }
 
         console.log('Début du téléchargement:', fileInfo.downloadUrl);
         
-        const response = await fetch(fileInfo.downloadUrl);
-        
-        if (!response.ok) {
-            throw new Error(`Erreur HTTP: ${response.status}`);
-        }
-
-        const contentLength = parseInt(response.headers.get('content-length') || '0');
-        console.log('Taille du fichier:', formatSize(contentLength));
-
-        // Configurer les en-têtes de la réponse
-        res.setHeader('Content-Length', contentLength);
-        res.setHeader('Content-Type', 'application/octet-stream');
-        res.setHeader('Content-Disposition', `attachment; filename="${fileInfo.fileName || 'download'}"`);
-
-        // Streaming du fichier
-        response.body.pipe(res);
-
-        // Mise à jour des statistiques
-        let bytesDownloaded = 0;
-        const startTime = Date.now();
-
-        response.body.on('data', chunk => {
-            bytesDownloaded += chunk.length;
-            const duration = (Date.now() - startTime) / 1000;
-            updateStats(bytesDownloaded, duration);
-        });
-
-        response.body.on('end', () => {
-            console.log('Téléchargement terminé:', {
-                taille: formatSize(bytesDownloaded),
-                durée: `${((Date.now() - startTime) / 1000).toFixed(1)}s`
+        // Vérifier si l'URL est relative (interne) ou absolue (externe)
+        let filePath;
+        if (fileInfo.downloadUrl.startsWith('/')) {
+            // URL relative, le fichier est déjà sur notre serveur
+            filePath = path.join(__dirname, fileInfo.downloadUrl);
+            
+            if (!fs.existsSync(filePath)) {
+                throw new Error(`Fichier introuvable: ${filePath}`);
+            }
+            
+            const stats = fs.statSync(filePath);
+            const contentLength = stats.size;
+            
+            // Configurer les en-têtes de la réponse
+            res.setHeader('Content-Length', contentLength);
+            res.setHeader('Content-Type', 'application/octet-stream');
+            res.setHeader('Content-Disposition', `attachment; filename="${fileInfo.fileName || 'download'}"`);
+            
+            // Streaming du fichier
+            const fileStream = fs.createReadStream(filePath);
+            fileStream.pipe(res);
+            
+            // Mise à jour des statistiques
+            let bytesDownloaded = 0;
+            const startTime = Date.now();
+            
+            fileStream.on('data', chunk => {
+                bytesDownloaded += chunk.length;
+                const duration = (Date.now() - startTime) / 1000;
+                updateStats(bytesDownloaded, duration);
             });
-        });
-
+            
+            fileStream.on('end', () => {
+                console.log('Téléchargement terminé:', {
+                    taille: formatSize(bytesDownloaded),
+                    durée: `${((Date.now() - startTime) / 1000).toFixed(1)}s`
+                });
+            });
+            
+            fileStream.on('error', (error) => {
+                console.error('Erreur lors du streaming du fichier:', error);
+                res.status(500).json({
+                    success: false,
+                    error: 'Erreur lors du streaming du fichier',
+                    message: error.message
+                });
+            });
+        } else {
+            // URL absolue, télécharger depuis une source externe
+            const response = await fetch(fileInfo.downloadUrl);
+            
+            if (!response.ok) {
+                throw new Error(`Erreur HTTP: ${response.status}`);
+            }
+            
+            const contentLength = parseInt(response.headers.get('content-length') || '0');
+            console.log('Taille du fichier:', formatSize(contentLength));
+            
+            // Configurer les en-têtes de la réponse
+            res.setHeader('Content-Length', contentLength);
+            res.setHeader('Content-Type', 'application/octet-stream');
+            res.setHeader('Content-Disposition', `attachment; filename="${fileInfo.fileName || 'download'}"`);
+            
+            // Streaming du fichier
+            response.body.pipe(res);
+            
+            // Mise à jour des statistiques
+            let bytesDownloaded = 0;
+            const startTime = Date.now();
+            
+            response.body.on('data', chunk => {
+                bytesDownloaded += chunk.length;
+                const duration = (Date.now() - startTime) / 1000;
+                updateStats(bytesDownloaded, duration);
+            });
+            
+            response.body.on('end', () => {
+                console.log('Téléchargement terminé:', {
+                    taille: formatSize(bytesDownloaded),
+                    durée: `${((Date.now() - startTime) / 1000).toFixed(1)}s`
+                });
+            });
+        }
     } catch (error) {
         console.error('Erreur lors du téléchargement:', error);
         res.status(500).json({ 
+            success: false,
             error: 'Erreur lors du téléchargement',
-            details: error.message
+            message: error.message
         });
     }
 });

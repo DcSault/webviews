@@ -952,13 +952,14 @@
 
     async function processUrl(urlData) {
       const { url, index } = urlData;
+      let controller = new AbortController();
       
       try {
         // Étape 1: Validation
         updateStep('stepValidation', 'processing', 'Validation en cours...');
         const validatedUrl = validateAndFixUrl(url);
-        if (!validatedUrl.includes('gofile.io')) {
-          throw new Error('URL GoFile invalide');
+        if (!validatedUrl.includes('gofile.io/d/')) {
+          throw new Error('URL GoFile invalide - Format attendu: https://gofile.io/d/ID');
         }
         updateStep('stepValidation', 'completed', 'URL validée');
         updateUrlProgress(index, 25);
@@ -966,24 +967,37 @@
         // Étape 2: Extraction
         updateStep('stepExtraction', 'processing', 'Extraction en cours...');
         console.log('Démarrage de l\'extraction pour', validatedUrl);
+        
+        // Extraire l'ID du contenu de l'URL
+        const contentId = validatedUrl.split('/d/')[1];
+        console.log('ID du contenu GoFile:', contentId);
+        
         const extractResponse = await fetch('/api/gofile/extract', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
           },
-          body: JSON.stringify({ url: validatedUrl })
+          body: JSON.stringify({ 
+            url: validatedUrl,
+            contentId: contentId
+          }),
+          signal: controller.signal
         });
 
-        const extractResult = await extractResponse.json();
-        if (!extractResponse.ok || !extractResult.success) {
-          const errorMsg = extractResult.details || 'Erreur lors de l\'extraction';
-          updateStep('stepExtraction', 'error', errorMsg);
-          throw new Error(errorMsg);
+        if (!extractResponse.ok) {
+          const errorData = await extractResponse.json();
+          console.error('Erreur extraction:', errorData);
+          updateStep('stepExtraction', 'error', `Erreur lors de l'extraction: ${errorData.error || errorData.message || 'Erreur inconnue'}`);
+          throw new Error(`Erreur lors de l'extraction Gofile: ${errorData.error || errorData.message || 'Erreur inconnue'}`);
         }
 
-        if (!extractResult.downloadUrl) {
+        const extractResult = await extractResponse.json();
+        console.log('Résultat extraction:', extractResult);
+
+        if (!extractResult.success || !extractResult.data || !extractResult.data.downloadUrl) {
           updateStep('stepExtraction', 'error', 'URL de téléchargement non trouvée');
-          throw new Error('URL de téléchargement non trouvée');
+          throw new Error('Impossible d\'obtenir l\'URL de téléchargement');
         }
 
         updateStep('stepExtraction', 'completed', 'Extraction réussie');
@@ -991,64 +1005,87 @@
 
         // Étape 3: Téléchargement
         updateStep('stepDownload', 'processing', 'Téléchargement en cours...');
-        console.log('Démarrage du téléchargement pour', extractResult.downloadUrl);
+        console.log('Démarrage du téléchargement:', extractResult.data);
+
         const downloadResponse = await fetch('/api/gofile/download', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ 
-            url: validatedUrl, 
-            fileInfo: {
-              downloadUrl: extractResult.downloadUrl,
-              fileName: extractResult.fileName,
-              fileSize: extractResult.fileSize
-            }
-          })
+          body: JSON.stringify({
+            fileInfo: extractResult.data
+          }),
+          signal: controller.signal
         });
 
         if (!downloadResponse.ok) {
           const error = await downloadResponse.json();
-          updateStep('stepDownload', 'error', error.details || 'Erreur lors du téléchargement');
-          throw new Error(error.details || 'Erreur lors du téléchargement');
+          updateStep('stepDownload', 'error', `Erreur: ${error.message || error.error || 'Erreur lors du téléchargement'}`);
+          throw new Error(error.message || error.error || 'Erreur lors du téléchargement');
         }
 
         const reader = downloadResponse.body.getReader();
-        const contentLength = extractResult.fileSize || parseInt(downloadResponse.headers.get('Content-Length')) || 0;
+        const contentLength = extractResult.data.fileSize || parseInt(downloadResponse.headers.get('Content-Length')) || 0;
         let receivedLength = 0;
+        let lastUpdate = Date.now();
+        let lastBytes = 0;
 
-        while(true) {
-          const {done, value} = await reader.read();
-          if (done) break;
+        while (true) {
+          const { done, value } = await reader.read();
+          
+          if (done) {
+            break;
+          }
           
           receivedLength += value.length;
-          const progress = contentLength > 0 ? (receivedLength / contentLength) * 100 : 0;
-          updateUrlProgress(index, Math.min(50 + progress/2, 100), receivedLength, contentLength);
-          updateStep('stepDownload', 'processing', `${Math.round(progress)}% téléchargé`);
+          const now = Date.now();
+          const timeDiff = (now - lastUpdate) / 1000; // en secondes
+          
+          if (timeDiff >= 1) {
+            const bytesDiff = receivedLength - lastBytes;
+            const speed = bytesDiff / timeDiff;
+            
+            const progress = contentLength ? (receivedLength / contentLength) * 100 : 0;
+            updateUrlProgress(index, Math.min(50 + progress/2, 100), receivedLength, contentLength);
+            updateStep('stepDownload', 'processing', `${Math.round(progress)}% - ${formatSpeed(speed)}`);
+            
+            lastUpdate = now;
+            lastBytes = receivedLength;
+          }
         }
 
         // Étape 4: Finalisation
         updateStep('stepDownload', 'completed', 'Téléchargement terminé');
         updateStep('stepComplete', 'completed', 'Traitement terminé');
 
+        const finalSpeed = (receivedLength / ((Date.now() - lastUpdate) / 1000)) || 0;
         addToHistory(url, {
-          speed: currentSpeeds.get(index)?.speed || 0,
+          speed: finalSpeed,
           size: contentLength
         });
 
         updateUrlProgress(index, 100);
         updateUrlStatus(index, 'completed', 'Terminé');
         completedDownloads++;
-        updateDownloadCounts();
+
       } catch (error) {
-        console.error('Erreur:', error);
-        updateUrlStatus(index, 'error', error.message);
-        updateStep('stepComplete', 'error', error.message);
+        console.error('Erreur détaillée:', error);
+        const errorMessage = error.message || 'Erreur inconnue';
+        updateUrlStatus(index, 'error', errorMessage);
+        updateStep('stepComplete', 'error', errorMessage);
+        
+        // Annuler la requête en cours si nécessaire
+        try {
+          controller.abort();
+        } catch (e) {
+          console.error('Erreur lors de l\'annulation:', e);
+        }
       } finally {
         activeDownloads--;
         currentSpeeds.delete(index);
         updateDownloadCounts();
         updateSpeedStats();
+        controller = null;
         processNextUrl();
       }
     }
